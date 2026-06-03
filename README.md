@@ -25,12 +25,22 @@ not a single API key).
    repos/containers/clouds linked as the team's *responsibilities* (issues are
    scoped to the team via `filter_team_id`).
 
-## 2. Slack setup (one-time)
+## 2. Slack setup (one-time) — pick one path
 
-Create a Slack app with a **bot token** (`xoxb-…`) and these scopes:
-**`chat:write`** and **`files:write`**. Invite the bot to the target channel.
-(The tool uploads charts with `files_upload_v2`; the legacy `files.upload` was
-retired by Slack in Nov 2025.)
+**Path A — incoming webhook (recommended, simplest).** Just a URL: no bot
+token, no scopes, no channel, no bot invite. Create a Slack app → enable
+**Incoming Webhooks** → *Add New Webhook to Workspace* → copy the
+`https://hooks.slack.com/services/…` URL into `SLACK_WEBHOOK_URL`. The webhook
+is bound to the channel you choose at creation.
+*Caveat:* webhooks cannot upload files, so charts only appear if you host the
+PNGs at a public URL and set `SLACK_CHART_BASE_URL`; otherwise the (rich) text
+newsletter is posted and the charts are kept as the run artifact / HTML preview.
+
+**Path B — bot token.** Use this if you want charts uploaded *directly* into
+the thread with no hosting. Create a bot token (`xoxb-…`) with **`chat:write`**
+and **`files:write`**, invite the bot to the channel, set `SLACK_BOT_TOKEN` and
+`SLACK_CHANNEL`. (Charts use `files_upload_v2`; legacy `files.upload` was retired
+by Slack in Nov 2025.)
 
 ## 3. Configure
 
@@ -46,7 +56,10 @@ pip install -r requirements.txt
 # Preview locally first — builds charts + an HTML preview, posts nothing:
 python -m main --dry-run --out ./out
 
-# Publish to Slack:
+# Publish to Slack (webhook path — just set SLACK_WEBHOOK_URL in .env):
+python -m main --region eu --days 30
+
+# ...or the bot-token path:
 python -m main --region eu --days 30 --slack-channel "#appsec-weekly"
 
 # Try it with synthetic data (no credentials needed):
@@ -75,9 +88,23 @@ python -m main --mock --dry-run --out ./out
            /usr/bin/python3 -m main --slack-channel "#appsec-weekly" >> run.log 2>&1
 ```
 
-**GitHub Actions** — store `AIKIDO_CLIENT_ID`, `AIKIDO_CLIENT_SECRET`,
-`SLACK_BOT_TOKEN` as repo secrets and run `python -m main --slack-channel …`
-on a `schedule:` cron trigger.
+**GitHub Actions** — a ready workflow ships at
+`.github/workflows/security-newsletter.yml` (weekly Monday 07:00 UTC + manual
+trigger). To enable it:
+
+1. Push this project to a repo (workflow expects the files at repo root).
+2. **Settings → Secrets and variables → Actions → Secrets**, add:
+   `AIKIDO_CLIENT_ID`, `AIKIDO_CLIENT_SECRET`, and `SLACK_WEBHOOK_URL`
+   (or, for the bot-token path, `SLACK_BOT_TOKEN`).
+3. Same screen → **Variables** (non-secret), optional: `AIKIDO_REGION`
+   (default `eu`), `WORKSPACE_NAME`, `SLACK_CHART_BASE_URL` (to embed charts in
+   webhook mode), and `SLACK_CHANNEL` (only needed for the bot-token path).
+4. The scheduled run posts to Slack. A **manual run** (Actions → Run workflow)
+   lets you override `days`/`channel` or tick **dry_run** to build a preview
+   without posting. Every run uploads `out/` (charts, HTML preview,
+   `report.json`) as an artifact and prints the KPIs to the run summary.
+
+> GitHub cron is UTC-only; `0 7 * * 1` ≈ 09:00 in Barcelona. Adjust as needed.
 
 ---
 

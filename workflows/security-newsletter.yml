@@ -1,0 +1,100 @@
+name: Product Security Newsletter
+
+# Weekly on Monday 07:00 UTC (~09:00 Europe/Madrid). GitHub cron is always UTC.
+# Plus a manual trigger that can override the window/channel or do a dry run.
+on:
+  schedule:
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "Reporting window (days)"
+        required: false
+        default: "30"
+      trend_weeks:
+        description: "Weeks in the trend chart"
+        required: false
+        default: "12"
+      channel:
+        description: "Slack channel (#name or ID). Blank => use SLACK_CHANNEL var"
+        required: false
+        default: ""
+      dry_run:
+        description: "Build preview only, do not post to Slack"
+        type: boolean
+        required: false
+        default: false
+
+# Don't let a manual run collide with the scheduled one.
+concurrency:
+  group: security-newsletter
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  newsletter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate & publish newsletter
+        env:
+          # --- secrets (Settings -> Secrets and variables -> Actions -> Secrets) ---
+          AIKIDO_CLIENT_ID: ${{ secrets.AIKIDO_CLIENT_ID }}
+          AIKIDO_CLIENT_SECRET: ${{ secrets.AIKIDO_CLIENT_SECRET }}
+          # Simplest Slack path: an incoming-webhook URL (no token/channel needed).
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          # Optional bot-token path instead (uploads charts directly into a thread):
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          # --- non-secret config (… -> Variables), with safe fallbacks ---
+          AIKIDO_REGION: ${{ vars.AIKIDO_REGION || 'eu' }}
+          WORKSPACE_NAME: ${{ vars.WORKSPACE_NAME }}
+          # Public base URL of hosted chart PNGs to embed images in webhook mode:
+          SLACK_CHART_BASE_URL: ${{ vars.SLACK_CHART_BASE_URL }}
+          # Only used by the bot-token path:
+          SLACK_CHANNEL: ${{ github.event.inputs.channel || vars.SLACK_CHANNEL }}
+          DAYS: ${{ github.event.inputs.days || '30' }}
+          TREND_WEEKS: ${{ github.event.inputs.trend_weeks || '12' }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          ARGS=(--region "$AIKIDO_REGION" --days "$DAYS" \
+                --trend-weeks "$TREND_WEEKS" --out ./out --save-json)
+          if [ "${DRY_RUN:-false}" = "true" ]; then
+            echo "::notice::Dry run — building preview, not posting to Slack."
+            ARGS+=(--dry-run)
+          elif [ -n "${SLACK_WEBHOOK_URL:-}" ]; then
+            echo "::notice::Posting via incoming webhook."
+            # main.py auto-detects SLACK_WEBHOOK_URL from the env.
+            :
+          elif [ -n "${SLACK_BOT_TOKEN:-}" ] && [ -n "${SLACK_CHANNEL:-}" ]; then
+            echo "::notice::Posting via bot token to ${SLACK_CHANNEL}."
+            ARGS+=(--slack-channel "$SLACK_CHANNEL")
+          else
+            echo "::error::No Slack target. Set the SLACK_WEBHOOK_URL secret (recommended), or SLACK_BOT_TOKEN + SLACK_CHANNEL."
+            exit 1
+          fi
+          python -m main "${ARGS[@]}"
+
+      - name: Write run summary
+        if: always()
+        run: python scripts/job_summary.py out/report.json >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Archive charts & preview
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: newsletter-${{ github.run_id }}
+          path: out/
+          retention-days: 30
+          if-no-files-found: ignore
