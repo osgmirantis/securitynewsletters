@@ -15,12 +15,13 @@ on:
         description: "Weeks in the trend chart"
         required: false
         default: "12"
-      channel:
-        description: "Slack channel (#name or ID). Blank => use SLACK_CHANNEL var"
-        required: false
-        default: ""
       dry_run:
-        description: "Build preview only, do not post to Slack"
+        description: "Render the email but do not send it"
+        type: boolean
+        required: false
+        default: false
+      per_workspace:
+        description: "Post one newsletter per workspace instead of one combined"
         type: boolean
         required: false
         default: false
@@ -47,48 +48,58 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Generate & publish newsletter
+      - name: Generate & send newsletter
         env:
-          # --- secrets (Settings -> Secrets and variables -> Actions -> Secrets) ---
+          # ----- Aikido: ONE workspace -----
           AIKIDO_CLIENT_ID: ${{ secrets.AIKIDO_CLIENT_ID }}
           AIKIDO_CLIENT_SECRET: ${{ secrets.AIKIDO_CLIENT_SECRET }}
-          # Simplest Slack path: an incoming-webhook URL (no token/channel needed).
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          # Optional bot-token path instead (uploads charts directly into a thread):
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-          # --- non-secret config (… -> Variables), with safe fallbacks ---
           AIKIDO_REGION: ${{ vars.AIKIDO_REGION || 'eu' }}
+          # ----- Aikido: MULTIPLE workspaces (overrides the single one above) -----
+          # Store this JSON as a repo VARIABLE; it references the secret names below.
+          #   AIKIDO_WORKSPACES = [
+          #     {"name":"Platform","region":"eu","id_env":"AIK_ID_PLATFORM","secret_env":"AIK_SECRET_PLATFORM"},
+          #     {"name":"Data","region":"us","id_env":"AIK_ID_DATA","secret_env":"AIK_SECRET_DATA"} ]
+          AIKIDO_WORKSPACES: ${{ vars.AIKIDO_WORKSPACES }}
+          AIK_ID_PLATFORM: ${{ secrets.AIK_ID_PLATFORM }}
+          AIK_SECRET_PLATFORM: ${{ secrets.AIK_SECRET_PLATFORM }}
+          AIK_ID_DATA: ${{ secrets.AIK_ID_DATA }}
+          AIK_SECRET_DATA: ${{ secrets.AIK_SECRET_DATA }}
+          # ----- Email recipients & sender (Variables; addresses aren't secret) -----
+          EMAIL_TO: ${{ vars.EMAIL_TO }}
+          EMAIL_CC: ${{ vars.EMAIL_CC }}
+          EMAIL_BCC: ${{ vars.EMAIL_BCC }}
+          EMAIL_FROM: ${{ vars.EMAIL_FROM }}
+          # ----- SMTP server (host/port/security as Variables; password as Secret) -----
+          SMTP_HOST: ${{ vars.SMTP_HOST }}
+          SMTP_PORT: ${{ vars.SMTP_PORT || '587' }}
+          SMTP_SECURITY: ${{ vars.SMTP_SECURITY || 'starttls' }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          # ----- misc -----
           WORKSPACE_NAME: ${{ vars.WORKSPACE_NAME }}
-          # Public base URL of hosted chart PNGs to embed images in webhook mode:
-          SLACK_CHART_BASE_URL: ${{ vars.SLACK_CHART_BASE_URL }}
-          # Only used by the bot-token path:
-          SLACK_CHANNEL: ${{ github.event.inputs.channel || vars.SLACK_CHANNEL }}
           DAYS: ${{ github.event.inputs.days || '30' }}
           TREND_WEEKS: ${{ github.event.inputs.trend_weeks || '12' }}
           DRY_RUN: ${{ github.event.inputs.dry_run }}
+          PER_WORKSPACE: ${{ github.event.inputs.per_workspace }}
         run: |
           set -euo pipefail
           ARGS=(--region "$AIKIDO_REGION" --days "$DAYS" \
                 --trend-weeks "$TREND_WEEKS" --out ./out --save-json)
+          [ "${PER_WORKSPACE:-false}" = "true" ] && ARGS+=(--per-workspace)
           if [ "${DRY_RUN:-false}" = "true" ]; then
-            echo "::notice::Dry run — building preview, not posting to Slack."
+            echo "::notice::Dry run — rendering HTML + .eml, not sending."
             ARGS+=(--dry-run)
-          elif [ -n "${SLACK_WEBHOOK_URL:-}" ]; then
-            echo "::notice::Posting via incoming webhook."
-            # main.py auto-detects SLACK_WEBHOOK_URL from the env.
-            :
-          elif [ -n "${SLACK_BOT_TOKEN:-}" ] && [ -n "${SLACK_CHANNEL:-}" ]; then
-            echo "::notice::Posting via bot token to ${SLACK_CHANNEL}."
-            ARGS+=(--slack-channel "$SLACK_CHANNEL")
+          elif [ -n "${SMTP_HOST:-}" ] && [ -n "${EMAIL_TO:-}" ]; then
+            echo "::notice::Emailing the newsletter to ${EMAIL_TO}."
           else
-            echo "::error::No Slack target. Set the SLACK_WEBHOOK_URL secret (recommended), or SLACK_BOT_TOKEN + SLACK_CHANNEL."
+            echo "::error::No email target. Set SMTP_HOST + EMAIL_TO (and SMTP_PASSWORD)."
             exit 1
           fi
           python -m main "${ARGS[@]}"
 
       - name: Write run summary
         if: always()
-        run: python scripts/job_summary.py out/report.json >> "$GITHUB_STEP_SUMMARY"
+        run: python scripts/job_summary.py out >> "$GITHUB_STEP_SUMMARY"
 
       - name: Archive charts & preview
         if: always()
