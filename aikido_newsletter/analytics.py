@@ -2,7 +2,7 @@
 AppSec / vuln-management KPI engine.
 
 Consumes the raw issue export (one list per product) and produces a single
-report dict consumed by the chart, Slack and HTML-preview layers.
+report dict consumed by the chart and email layers.
 
 KPIs implemented (all derivable from the /issues/export schema):
   - Open severity mix (critical/high/medium/low)
