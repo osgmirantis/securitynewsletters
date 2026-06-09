@@ -53,8 +53,9 @@ jobs:
           # ===================== Aikido credentials (per-workspace) =====================
           # You have 4 workspaces -> declare them in AIKIDO_WORKSPACES (JSON array,
           # one object per workspace). Simplest: a SECRET named AIKIDO_WORKSPACES
-          # holding inline creds (see README §1). It may be a Variable instead if you
-          # use "id_env"/"secret_env" refs (then map each pair below). Secret wins.
+          # holding inline creds (see README §1). Add "all_teams":true to a workspace
+          # whose teams don't use the Product: prefix (e.g. MOSK) to report them all.
+          # It may be a Variable instead if you use "id_env"/"secret_env" refs. Secret wins.
           AIKIDO_WORKSPACES: ${{ secrets.AIKIDO_WORKSPACES || vars.AIKIDO_WORKSPACES }}
           AIKIDO_REGION: ${{ vars.AIKIDO_REGION || 'eu' }}
           WORKSPACE_NAME: ${{ vars.WORKSPACE_NAME }}
