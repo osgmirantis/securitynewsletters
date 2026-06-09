@@ -268,17 +268,32 @@ class EmailPublisher:
 
     def send(self, msg: EmailMessage, to_addrs: list[str]) -> None:
         ctx = ssl.create_default_context()
-        if self.security == "ssl":
-            smtp = smtplib.SMTP_SSL(self.host, self.port, context=ctx, timeout=30)
-        else:
-            smtp = smtplib.SMTP(self.host, self.port, timeout=30)
+        try:
+            if self.security == "ssl":
+                smtp = smtplib.SMTP_SSL(self.host, self.port, context=ctx, timeout=30)
+            else:
+                smtp = smtplib.SMTP(self.host, self.port, timeout=30)
+        except OSError as e:
+            raise RuntimeError(
+                f"Could not connect to SMTP {self.host}:{self.port} ({e}). "
+                f"Check SMTP_HOST (Gmail is 'smtp.gmail.com', not 'smtp.google.com'), "
+                f"the port (587=starttls, 465=ssl), and that the host is reachable "
+                f"(GitHub runners allow 587/465 but block 25)."
+            ) from e
         try:
             smtp.ehlo()
             if self.security == "starttls":
                 smtp.starttls(context=ctx)
                 smtp.ehlo()
             if self.username:
-                smtp.login(self.username, self.password or "")
+                try:
+                    smtp.login(self.username, self.password or "")
+                except smtplib.SMTPAuthenticationError as e:
+                    raise RuntimeError(
+                        f"SMTP auth failed for {self.username} ({e.smtp_code}). "
+                        f"For Gmail/Workspace use a 16-char App Password (2-Step "
+                        f"Verification required), not the account password."
+                    ) from e
             smtp.send_message(msg, to_addrs=to_addrs)
         finally:
             smtp.quit()

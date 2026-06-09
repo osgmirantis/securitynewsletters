@@ -30,6 +30,16 @@ class Workspace:
     client_secret: str
 
 
+def presence() -> str:
+    """Report which credential env vars are visible, without leaking values."""
+    def st(n: str) -> str:
+        v = os.environ.get(n)
+        return "set" if v else ("EMPTY" if v == "" else "unset")
+    return (f"AIKIDO_WORKSPACES={st('AIKIDO_WORKSPACES')}, "
+            f"AIKIDO_CLIENT_ID={st('AIKIDO_CLIENT_ID')}, "
+            f"AIKIDO_CLIENT_SECRET={st('AIKIDO_CLIENT_SECRET')}")
+
+
 def load() -> list[Workspace]:
     raw = os.environ.get("AIKIDO_WORKSPACES")
     if raw:

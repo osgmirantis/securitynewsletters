@@ -88,8 +88,14 @@ def gather(args) -> list[tuple[str, dict]]:
 
     wss = workspaces.load()
     if not wss:
-        sys.exit("ERROR: configure credentials — AIKIDO_CLIENT_ID/SECRET, or "
-                 "AIKIDO_WORKSPACES (JSON) for several (or --mock).")
+        sys.exit(
+            "ERROR: no Aikido credentials in the environment "
+            f"[{workspaces.presence()}].\n"
+            "In GitHub Actions, secrets are NOT auto-injected — each must be mapped "
+            "in the step's `env:` block, e.g.:\n"
+            "    AIKIDO_CLIENT_ID: ${{ secrets.AIKIDO_CLIENT_ID }}\n"
+            "    AIKIDO_CLIENT_SECRET: ${{ secrets.AIKIDO_CLIENT_SECRET }}\n"
+            "Set AIKIDO_CLIENT_ID/SECRET, or AIKIDO_WORKSPACES (JSON), or pass --mock.")
     multi = len(wss) > 1
     per_ws: list[tuple[str, dict]] = []
     for ws in wss:
