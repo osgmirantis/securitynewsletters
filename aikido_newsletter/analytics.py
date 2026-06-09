@@ -45,6 +45,28 @@ TYPE_LABELS = {
     "license": "License",
 }
 
+# Origin grouping: WHERE a finding comes from / what fixing it means.
+#   Code (SAST)         -> insecure code we wrote          (fix: change code)
+#   Dependencies (SCA)  -> vulnerable libraries we pulled  (fix: upgrade dep)
+#   Container images    -> CVEs in base images / OS pkgs   (fix: rebuild/patch image)
+#   Secrets             -> leaked credentials in repos     (fix: rotate + remove)
+#   Infrastructure      -> IaC / cloud misconfiguration    (fix: config)
+SOURCE_CATEGORIES = {
+    "sast": "Code (SAST)",
+    "open_source": "Dependencies (SCA)",
+    "docker_container": "Container images",
+    "leaked_secret": "Secrets",
+    "iac": "Infrastructure",
+    "cloud": "Infrastructure",
+    "cloud_instance": "Infrastructure",
+}
+SOURCE_ORDER = ["Code (SAST)", "Dependencies (SCA)", "Container images",
+                "Secrets", "Infrastructure", "Other"]
+
+
+def source_category(issue_type: str) -> str:
+    return SOURCE_CATEGORIES.get(issue_type or "", "Other")
+
 
 def _is_open(i: dict) -> bool:
     return i.get("status") == "open"
@@ -74,6 +96,7 @@ def _product_stats(name: str, issues: list[dict], now: int, days: int) -> dict:
 
     severity_open = Counter(i.get("severity", "low") for i in open_issues)
     type_open = Counter(i.get("type", "unknown") for i in open_issues)
+    source_open = Counter(source_category(i.get("type", "")) for i in open_issues)
 
     # MTTR overall + per severity (over ALL closed issues with valid timestamps)
     mttr_all = [d for i in closed_issues if (d := _mttr_days(i)) is not None]
@@ -138,6 +161,7 @@ def _product_stats(name: str, issues: list[dict], now: int, days: int) -> dict:
         "snoozed": sum(1 for i in issues if i.get("status") == "snoozed"),
         "severity_open": {s: severity_open.get(s, 0) for s in SEVERITIES},
         "type_open": dict(type_open),
+        "source_open": dict(source_open),
         "risk_score": risk,
         "overdue_open": len(overdue_open),
         "mttr_all": _stat_block(mttr_all),
@@ -231,6 +255,16 @@ def _insights(report: dict) -> list[str]:
     if report["top_cwes"]:
         cwe, c = report["top_cwes"][0]
         out.append(f"Most common weakness class is *{cwe}*, seen in {c} open findings.")
+
+    src = ov.get("source_open", {})
+    if sum(src.values()):
+        code = src.get("Code (SAST)", 0)
+        cont = src.get("Container images", 0)
+        dep = src.get("Dependencies (SCA)", 0)
+        out.append(
+            f"By origin: *{code}* from our own code (SAST), *{cont}* from container "
+            f"images, *{dep}* from dependencies (SCA) — i.e. how much is insecure "
+            f"code vs insecure images vs vulnerable libraries.")
 
     crit_mttr = ov["mttr_by_sev"]["critical"]["median"]
     if crit_mttr is not None:

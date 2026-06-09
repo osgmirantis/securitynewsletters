@@ -26,14 +26,17 @@ from email.utils import formatdate, make_msgid
 from .analytics import TYPE_LABELS
 
 SEV = {"critical": "#f85149", "high": "#fb8500", "medium": "#d4a200", "low": "#2f6df6"}
+SRC = {"Code (SAST)": "#2f6df6", "Dependencies (SCA)": "#8957e5",
+       "Container images": "#1f9aa8", "Secrets": "#f85149",
+       "Infrastructure": "#d4760a", "Other": "#8b949e"}
 INK = "#1a1d24"
 MUTED = "#5b6470"
 LINE = "#e4e7ec"
 DARK = "#0d1117"
 ACCENT = "#2f6df6"
 
-CHART_ORDER = ["risk_leaderboard", "severity_by_product", "opened_vs_closed_trend",
-               "mttr_by_severity", "issue_type_mix", "open_aging", "top_cwes"]
+CHART_ORDER = ["risk_leaderboard", "severity_by_product", "findings_by_source",
+               "opened_vs_closed_trend", "mttr_by_severity", "open_aging", "top_cwes"]
 
 
 def _d(ts: int) -> str:
@@ -125,6 +128,25 @@ def render_html(report: dict, img_src: dict[str, str], workspace: str = "") -> s
         f'font-size:12px;color:{INK};">{c} <span style="color:{MUTED};">×{n}</span></span>'
         for c, n in report["top_cwes"][:8])
 
+    # Origin breakdown (code vs images vs deps vs secrets vs infra)
+    from .analytics import SOURCE_ORDER
+    src = report["overall"].get("source_open", {})
+    total_src = sum(src.values()) or 1
+    source_rows = ""
+    for cat in SOURCE_ORDER:
+        v = src.get(cat, 0)
+        if not v:
+            continue
+        pct = round(100 * v / total_src)
+        source_rows += (
+            f'<tr><td style="padding:8px 12px;border-bottom:1px solid {LINE};">'
+            f'<span style="display:inline-block;width:9px;height:9px;border-radius:2px;'
+            f'background:{SRC.get(cat, "#888")};margin-right:8px;"></span>{cat}</td>'
+            f'<td align="right" style="padding:8px 12px;border-bottom:1px solid {LINE};'
+            f'font-weight:700;">{v}</td>'
+            f'<td align="right" style="padding:8px 12px;border-bottom:1px solid {LINE};'
+            f'color:{MUTED};">{pct}%</td></tr>')
+
     charts_html = ""
     for name in CHART_ORDER:
         if name in img_src:
@@ -182,6 +204,20 @@ def render_html(report: dict, img_src: dict[str, str], workspace: str = "") -> s
               <td align="right" style="padding:9px 12px;">Δ</td></tr>
             {lb_rows}
           </table></td></tr>
+        {section_title("🧭 Where findings come from (origin)")}
+        <tr><td style="padding:8px 0 2px;color:{MUTED};font-size:12px;">
+          Code (SAST) = insecure code we wrote · Container images = CVEs in base
+          images we run · Dependencies (SCA) = vulnerable libraries we pulled in.
+        </td></tr>
+        <tr><td style="padding-top:8px;">
+          <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
+            style="border:1px solid {LINE};border-radius:8px;overflow:hidden;font-size:13px;color:{INK};">
+            <tr style="background:#f4f5f7;font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:{MUTED};">
+              <td style="padding:8px 12px;">Source</td>
+              <td align="right" style="padding:8px 12px;">Open</td>
+              <td align="right" style="padding:8px 12px;">Share</td></tr>
+            {source_rows}
+          </table></td></tr>
         {section_title("🔥 Most critical open findings")}
         <tr><td style="padding-top:6px;"><table width="100%" cellpadding="0" cellspacing="0" role="presentation">{crit}</table></td></tr>
         {section_title("Top weakness classes (CWE)")}
@@ -219,6 +255,15 @@ def render_text(report: dict, workspace: str = "") -> str:
     for b in report["leaderboard"]:
         L.append(f"  {b['name'][:17]:<18}{b['risk_score']:>5}{b['open_critical']:>5}"
                  f"{b['open_high']:>5}{b['overdue']:>6}")
+    from .analytics import SOURCE_ORDER
+    src = report["overall"].get("source_open", {})
+    tot = sum(src.values()) or 1
+    if sum(src.values()):
+        L += ["", "WHERE FINDINGS COME FROM (origin)"]
+        for cat in SOURCE_ORDER:
+            v = src.get(cat, 0)
+            if v:
+                L.append(f"  {cat:<22}{v:>5}  ({round(100 * v / tot)}%)")
     L += ["", "TOP CRITICAL FINDINGS"]
     for c in report["top_critical_issues"][:8]:
         ident = c["cve"] or c["package"] or ""

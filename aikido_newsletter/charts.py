@@ -23,6 +23,12 @@ MUTED = "#8b949e"
 ACCENT = "#2f81f7"
 SEV_COLORS = {"critical": "#f85149", "high": "#fb8500", "medium": "#f5c518", "low": "#58a6ff"}
 SERIES = ["#2f81f7", "#3fb950", "#f85149", "#a371f7", "#fb8500", "#56d4dd"]
+# Origin colours: code=blue, deps=purple, container=cyan, secrets=red, infra=orange
+SOURCE_COLORS = {
+    "Code (SAST)": "#2f81f7", "Dependencies (SCA)": "#a371f7",
+    "Container images": "#56d4dd", "Secrets": "#f85149",
+    "Infrastructure": "#fb8500", "Other": "#8b949e",
+}
 
 plt.rcParams.update({
     "figure.facecolor": BG, "axes.facecolor": PANEL, "savefig.facecolor": BG,
@@ -88,6 +94,34 @@ def risk_leaderboard(report: dict, out_dir: str) -> str:
     ax.set_title("Product risk leaderboard  (10·C + 5·H + 2·M + 1·L, open issues)")
     ax.set_xlabel("Risk score")
     return _save(fig, out_dir, "risk_leaderboard.png")
+
+
+def findings_by_source(report: dict, out_dir: str) -> str:
+    """Per-product open findings grouped by ORIGIN: code (SAST) vs container
+    images vs dependencies (SCA) vs secrets vs infrastructure."""
+    from .analytics import SOURCE_ORDER
+    products = list(report["products"].values())
+    products.sort(key=lambda p: sum(p.get("source_open", {}).values()))
+    names = [p["name"] for p in products]
+    fig, ax = plt.subplots(figsize=(8, max(2.6, 0.55 * len(names) + 1.6)))
+    left = [0] * len(names)
+    for cat in SOURCE_ORDER:
+        vals = [p.get("source_open", {}).get(cat, 0) for p in products]
+        if not any(vals):
+            continue
+        ax.barh(names, vals, left=left, color=SOURCE_COLORS[cat], label=cat,
+                height=0.62, edgecolor=BG, linewidth=1)
+        left = [l + v for l, v in zip(left, vals)]
+    for i, total in enumerate(left):
+        if total:
+            ax.text(total + max(left) * 0.01, i, str(int(total)), va="center",
+                    color=MUTED, fontsize=10)
+    _style(ax)
+    ax.set_title("Open findings by source  (insecure code vs images vs deps)", pad=14)
+    ax.set_xlabel("Open findings")
+    ax.legend(ncol=3, frameon=False, loc="upper center", fontsize=9,
+              bbox_to_anchor=(0.5, -0.18))
+    return _save(fig, out_dir, "findings_by_source.png")
 
 
 def issue_type_mix(report: dict, out_dir: str) -> str:
@@ -195,9 +229,9 @@ def top_cwes(report: dict, out_dir: str) -> str:
 CHARTS = [
     ("risk_leaderboard", risk_leaderboard),
     ("severity_by_product", severity_by_product),
+    ("findings_by_source", findings_by_source),
     ("opened_vs_closed_trend", opened_vs_closed_trend),
     ("mttr_by_severity", mttr_by_severity),
-    ("issue_type_mix", issue_type_mix),
     ("open_aging", open_aging),
     ("top_cwes", top_cwes),
 ]
