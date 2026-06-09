@@ -50,20 +50,27 @@ jobs:
 
       - name: Generate & send newsletter
         env:
-          # ----- Aikido: ONE workspace -----
-          AIKIDO_CLIENT_ID: ${{ secrets.AIKIDO_CLIENT_ID }}
-          AIKIDO_CLIENT_SECRET: ${{ secrets.AIKIDO_CLIENT_SECRET }}
+          # ===================== Aikido credentials (per-workspace) =====================
+          # You have 4 workspaces -> declare them in AIKIDO_WORKSPACES (JSON array,
+          # one object per workspace). Simplest: a SECRET named AIKIDO_WORKSPACES
+          # holding inline creds (see README §1). It may be a Variable instead if you
+          # use "id_env"/"secret_env" refs (then map each pair below). Secret wins.
+          AIKIDO_WORKSPACES: ${{ secrets.AIKIDO_WORKSPACES || vars.AIKIDO_WORKSPACES }}
           AIKIDO_REGION: ${{ vars.AIKIDO_REGION || 'eu' }}
-          # ----- Aikido: MULTIPLE workspaces (overrides the single one above) -----
-          # Store this JSON as a repo VARIABLE; it references the secret names below.
-          #   AIKIDO_WORKSPACES = [
-          #     {"name":"Platform","region":"eu","id_env":"AIK_ID_PLATFORM","secret_env":"AIK_SECRET_PLATFORM"},
-          #     {"name":"Data","region":"us","id_env":"AIK_ID_DATA","secret_env":"AIK_SECRET_DATA"} ]
-          AIKIDO_WORKSPACES: ${{ vars.AIKIDO_WORKSPACES }}
-          AIK_ID_PLATFORM: ${{ secrets.AIK_ID_PLATFORM }}
-          AIK_SECRET_PLATFORM: ${{ secrets.AIK_SECRET_PLATFORM }}
-          AIK_ID_DATA: ${{ secrets.AIK_ID_DATA }}
-          AIK_SECRET_DATA: ${{ secrets.AIK_SECRET_DATA }}
+          WORKSPACE_NAME: ${{ vars.WORKSPACE_NAME }}
+          # Single-workspace fallback (used only if AIKIDO_WORKSPACES is empty):
+          AIKIDO_CLIENT_ID: ${{ secrets.AIK_ID_K0RDENT }}
+          AIKIDO_CLIENT_SECRET: ${{ secrets.AIK_SECRET_K0RDENT }}
+          # Granular alternative — AIKIDO_WORKSPACES as a VARIABLE with id_env/secret_env
+          # refs, plus one secret pair per workspace mapped here (uncomment & extend):
+          # AIK_ID_K0RDENT: ${{ secrets.AIK_ID_K0RDENT }}
+          # AIK_SECRET_K0RDENT: ${{ secrets.AIK_SECRET_K0RDENT }}
+          # AIK_ID_WS2: ${{ secrets.AIK_ID_WS2 }}
+          # AIK_SECRET_WS2: ${{ secrets.AIK_SECRET_WS2 }}
+          # AIK_ID_WS3: ${{ secrets.AIK_ID_WS3 }}
+          # AIK_SECRET_WS3: ${{ secrets.AIK_SECRET_WS3 }}
+          # AIK_ID_WS4: ${{ secrets.AIK_ID_WS4 }}
+          # AIK_SECRET_WS4: ${{ secrets.AIK_SECRET_WS4 }}
           # ----- Email recipients & sender (Variables; addresses aren't secret) -----
           EMAIL_TO: ${{ vars.EMAIL_TO }}
           EMAIL_CC: ${{ vars.EMAIL_CC }}
