@@ -53,24 +53,25 @@ jobs:
           # ===================== Aikido credentials (per-workspace) =====================
           # You have 4 workspaces -> declare them in AIKIDO_WORKSPACES (JSON array,
           # one object per workspace). Simplest: a SECRET named AIKIDO_WORKSPACES
-          # holding inline creds (see README §1). It may be a Variable instead if you
-          # use "id_env"/"secret_env" refs (then map each pair below). Secret wins.
+          # holding inline creds (see README §1). Add "all_teams":true to a workspace
+          # whose teams don't use the Product: prefix (e.g. MOSK) to report them all.
+          # It may be a Variable instead if you use "id_env"/"secret_env" refs. Secret wins.
           AIKIDO_WORKSPACES: ${{ secrets.AIKIDO_WORKSPACES || vars.AIKIDO_WORKSPACES }}
           AIKIDO_REGION: ${{ vars.AIKIDO_REGION || 'eu' }}
           WORKSPACE_NAME: ${{ vars.WORKSPACE_NAME }}
           # Single-workspace fallback (used only if AIKIDO_WORKSPACES is empty):
-          AIKIDO_CLIENT_ID: ${{ secrets.AIK_ID_K0RDENT }}
-          AIKIDO_CLIENT_SECRET: ${{ secrets.AIK_SECRET_K0RDENT }}
+          # AIKIDO_CLIENT_ID: ${{ secrets.AIK_ID_K0RDENT }}
+          # AIKIDO_CLIENT_SECRET: ${{ secrets.AIK_SECRET_K0RDENT }}
           # Granular alternative — AIKIDO_WORKSPACES as a VARIABLE with id_env/secret_env
           # refs, plus one secret pair per workspace mapped here (uncomment & extend):
-          # AIK_ID_K0RDENT: ${{ secrets.AIK_ID_K0RDENT }}
-          # AIK_SECRET_K0RDENT: ${{ secrets.AIK_SECRET_K0RDENT }}
-          # AIK_ID_WS2: ${{ secrets.AIK_ID_WS2 }}
-          # AIK_SECRET_WS2: ${{ secrets.AIK_SECRET_WS2 }}
-          # AIK_ID_WS3: ${{ secrets.AIK_ID_WS3 }}
-          # AIK_SECRET_WS3: ${{ secrets.AIK_SECRET_WS3 }}
-          # AIK_ID_WS4: ${{ secrets.AIK_ID_WS4 }}
-          # AIK_SECRET_WS4: ${{ secrets.AIK_SECRET_WS4 }}
+          AIK_ID_K0RDENT: ${{ secrets.AIK_ID_K0RDENT }}
+          AIK_SECRET_K0RDENT: ${{ secrets.AIK_SECRET_K0RDENT }}
+          AIK_ID_MIRANTIS: ${{ secrets.AIK_ID_MIRANTIS }}
+          AIK_SECRET_MIRANTIS: ${{ secrets.AIK_SECRET_MIRANTIS }}
+          AIK_ID_MIRANTISPS: ${{ secrets.AIK_ID_MIRANTISPS }}
+          AIK_SECRET_MIRANTISPS: ${{ secrets.AIK_SECRET_MIRANTISPS }}
+          AIK_ID_MOSK: ${{ secrets.AIK_ID_MOSK }}
+          AIK_SECRET_MOSK: ${{ secrets.AIK_SECRET_MOSK }}
           # ----- Email recipients & sender (Variables; addresses aren't secret) -----
           EMAIL_TO: ${{ vars.EMAIL_TO }}
           EMAIL_CC: ${{ vars.EMAIL_CC }}
@@ -83,7 +84,6 @@ jobs:
           SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           # ----- misc -----
-          WORKSPACE_NAME: ${{ vars.WORKSPACE_NAME }}
           DAYS: ${{ github.event.inputs.days || '30' }}
           TREND_WEEKS: ${{ github.event.inputs.trend_weeks || '12' }}
           DRY_RUN: ${{ github.event.inputs.dry_run }}
