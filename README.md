@@ -43,9 +43,16 @@ secrets, store it as a **GitHub Actions Secret** named `AIKIDO_WORKSPACES`
   {"name":"k0rdent","region":"eu","client_id":"AIK_CLIENT_aaa","client_secret":"sec_aaa"},
   {"name":"workspace2","region":"eu","client_id":"AIK_CLIENT_bbb","client_secret":"sec_bbb"},
   {"name":"workspace3","region":"us","client_id":"AIK_CLIENT_ccc","client_secret":"sec_ccc"},
-  {"name":"workspace4","region":"eu","client_id":"AIK_CLIENT_ddd","client_secret":"sec_ddd"}
+  {"name":"MOSK","region":"eu","client_id":"AIK_CLIENT_ddd","client_secret":"sec_ddd","all_teams":true}
 ]
 ```
+
+Per-workspace team filtering:
+- By default a workspace reports only teams whose name starts with the global
+  `--product-prefix` (`Product:`).
+- `"all_teams": true` — report **every** team in that workspace (e.g. **MOSK**,
+  whose teams don't follow the `Product:` convention). Team names are used as-is.
+- `"prefix": "Service:"` — override the prefix for just that workspace.
 
 **(b) By reference — keeps each secret separate.** The JSON holds no secrets,
 only `id_env`/`secret_env` pointing at other env vars, so it can be a
@@ -165,6 +172,11 @@ All KPIs derive from the `/issues/export` fields, scoped per product team.
 - **Open severity mix** — open issues grouped by `severity`.
 - **Issue-type mix** — open issues grouped by `type` (SAST, open-source/SCA,
   secrets, IaC, container, cloud, …).
+- **Findings by source (origin)** — open issues grouped into where they come
+  from / what fixing them means: *Code (SAST)* = insecure code we wrote,
+  *Container images* = CVEs in base images we run, *Dependencies (SCA)* =
+  vulnerable libraries we pulled in, plus *Secrets* and *Infrastructure*. Edit
+  the mapping in `analytics.py:SOURCE_CATEGORIES`.
 - **MTTR** — `closed_at − first_detected_at`, mean & median in days, overall and
   per severity.
 - **SLA adherence** — closed issues where `closed_at ≤ sla_remediate_by`;

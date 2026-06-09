@@ -99,9 +99,11 @@ def gather(args) -> list[tuple[str, dict]]:
     multi = len(wss) > 1
     per_ws: list[tuple[str, dict]] = []
     for ws in wss:
-        print(f"• Workspace {ws.name!r} ({ws.region}): listing {args.product_prefix!r} teams…")
+        prefix = ws.prefix if ws.prefix is not None else args.product_prefix
+        scope = f"prefix {prefix!r}" if prefix else "ALL teams"
+        print(f"• Workspace {ws.name!r} ({ws.region}): listing teams ({scope})…")
         client = AikidoClient(ws.client_id, ws.client_secret, region=ws.region)
-        bp = client.issues_by_product(prefix=args.product_prefix, status="all")
+        bp = client.issues_by_product(prefix=prefix, status="all")
         for name, issues in bp.items():
             print(f"    {name}: {len(issues)} issues")
         per_ws.append((ws.name, bp))

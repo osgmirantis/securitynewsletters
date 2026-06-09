@@ -28,6 +28,7 @@ class Workspace:
     region: str
     client_id: str
     client_secret: str
+    prefix: str | None = None  # None => global default; "" => all teams (e.g. MOSK)
 
 
 def presence() -> str:
@@ -52,7 +53,10 @@ def load() -> list[Workspace]:
                     f"Workspace {e.get('name', '?')!r}: missing client_id/secret "
                     f"(checked inline and env {e.get('id_env')}/{e.get('secret_env')})."
                 )
-            out.append(Workspace(e["name"], e.get("region", "eu"), cid, sec))
+            prefix = e.get("prefix")            # explicit per-workspace override
+            if e.get("all_teams"):              # convenience flag => take every team
+                prefix = ""
+            out.append(Workspace(e["name"], e.get("region", "eu"), cid, sec, prefix))
         if not out:
             raise SystemExit("AIKIDO_WORKSPACES is empty.")
         return out

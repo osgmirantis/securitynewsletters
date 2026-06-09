@@ -162,9 +162,21 @@ class AikidoClient:
     def issues_by_product(
         self, prefix: str = "Product:", status: str = "all"
     ) -> dict[str, list[dict]]:
-        """Map of product display-name -> list of issues for that product team."""
+        """Map of product display-name -> issues for each matching team.
+
+        prefix="" (or None) matches every team — used for workspaces like MOSK
+        whose teams don't follow the `Product:` convention.
+        """
         out: dict[str, list[dict]] = {}
-        for team in self.product_teams(prefix):
-            display = team.name.split(":", 1)[1].strip() or team.name
-            out[display] = self.export_issues(team_id=team.id, status=status)
+        for team in self.product_teams(prefix or ""):
+            out[display_name(team.name, prefix or "")] = self.export_issues(
+                team_id=team.id, status=status)
         return out
+
+
+def display_name(team_name: str, prefix: str) -> str:
+    """Strip the product prefix for display; fall back to the full team name
+    (e.g. MOSK teams that have no `Product:` prefix)."""
+    if prefix and team_name.lower().startswith(prefix.lower()):
+        return team_name[len(prefix):].strip(" :") or team_name
+    return team_name
