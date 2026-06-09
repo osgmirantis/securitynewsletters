@@ -1,6 +1,6 @@
 name: Product Security Newsletter
 
-# Weekly on Monday 07:00 UTC (~09:00 Europe/Madrid). GitHub cron is always UTC.
+# Weekly on Friday 08:00 UTC. GitHub cron is always UTC.
 # Plus a manual trigger that can override the window/channel or do a dry run.
 on:
   schedule:
