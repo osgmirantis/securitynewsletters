@@ -4,7 +4,7 @@ name: Product Security Newsletter
 # Plus a manual trigger that can override the window/channel or do a dry run.
 on:
   schedule:
-    - cron: "0 7 * * 1"
+    - cron: "0 8 * * 5"
   workflow_dispatch:
     inputs:
       days:
