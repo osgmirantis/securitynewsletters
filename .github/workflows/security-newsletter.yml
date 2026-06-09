@@ -83,7 +83,6 @@ jobs:
           SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           # ----- misc -----
-          WORKSPACE_NAME: ${{ vars.WORKSPACE_NAME }}
           DAYS: ${{ github.event.inputs.days || '30' }}
           TREND_WEEKS: ${{ github.event.inputs.trend_weeks || '12' }}
           DRY_RUN: ${{ github.event.inputs.dry_run }}
