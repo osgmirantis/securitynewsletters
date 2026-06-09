@@ -29,23 +29,46 @@ not a single API key).
 ### Multiple Aikido workspaces
 
 Aikido API credentials are **workspace-scoped** — there is no cross-workspace
-token — so create one Client ID/Secret **per workspace**. Then describe them in
-the `AIKIDO_WORKSPACES` env var (JSON); each entry references its own secret env
-vars so the secrets stay separate:
+token — so create one Client ID/Secret **per workspace** (in each workspace's
+Settings → Integrations → API). Declare the workspaces in `AIKIDO_WORKSPACES`, a
+JSON array with one object per workspace. Two ways to provide the credentials:
+
+**(a) Inline — recommended for several workspaces.** Put the whole JSON, with
+inline `client_id`/`client_secret`, in a single value. Because it contains
+secrets, store it as a **GitHub Actions Secret** named `AIKIDO_WORKSPACES`
+(locally, an env var). One value, nothing else to wire:
 
 ```json
 [
-  {"name":"Platform","region":"eu","id_env":"AIK_ID_PLATFORM","secret_env":"AIK_SECRET_PLATFORM"},
-  {"name":"Data","region":"us","id_env":"AIK_ID_DATA","secret_env":"AIK_SECRET_DATA"}
+  {"name":"k0rdent","region":"eu","client_id":"AIK_CLIENT_aaa","client_secret":"sec_aaa"},
+  {"name":"workspace2","region":"eu","client_id":"AIK_CLIENT_bbb","client_secret":"sec_bbb"},
+  {"name":"workspace3","region":"us","client_id":"AIK_CLIENT_ccc","client_secret":"sec_ccc"},
+  {"name":"workspace4","region":"eu","client_id":"AIK_CLIENT_ddd","client_secret":"sec_ddd"}
 ]
 ```
 
+**(b) By reference — keeps each secret separate.** The JSON holds no secrets,
+only `id_env`/`secret_env` pointing at other env vars, so it can be a
+**Variable**; store each Client ID/Secret as its own Secret and map them in the
+workflow `env:` block:
+
+```json
+[
+  {"name":"k0rdent","region":"eu","id_env":"AIK_ID_K0RDENT","secret_env":"AIK_SECRET_K0RDENT"},
+  {"name":"workspace2","region":"eu","id_env":"AIK_ID_WS2","secret_env":"AIK_SECRET_WS2"}
+]
+```
+
+Notes:
+- `region` is per workspace (`eu`/`us`/`me`) — set each to match where that
+  workspace lives.
 - **Default**: one *combined* email; product names are namespaced as
-  `Workspace · Product` when more than one workspace is configured.
-- `--per-workspace`: a *separate* email per workspace (one chart set each;
-  outputs go to `out/<workspace>/`).
-- If `AIKIDO_WORKSPACES` is unset, the tool falls back to a single workspace via
-  `AIKIDO_CLIENT_ID` / `AIKIDO_CLIENT_SECRET` / `AIKIDO_REGION`.
+  `Workspace · Product` across all workspaces. Use `--per-workspace` for a
+  *separate* email per workspace (outputs to `out/<workspace>/`).
+- If `AIKIDO_WORKSPACES` is unset/empty, the tool falls back to a single
+  workspace via `AIKIDO_CLIENT_ID` / `AIKIDO_CLIENT_SECRET` / `AIKIDO_REGION`.
+- In the shipped workflow, `AIKIDO_WORKSPACES` is read from a Secret if present,
+  otherwise a Variable: `${{ secrets.AIKIDO_WORKSPACES || vars.AIKIDO_WORKSPACES }}`.
 
 ## 2. Email / SMTP setup (one-time)
 
