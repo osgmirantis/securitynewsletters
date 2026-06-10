@@ -192,6 +192,26 @@ All KPIs derive from the `/issues/export` fields, scoped per product team.
   highest-risk product, dominant CWE, critical MTTR, total overdue, and net
   backlog change. Edit `analytics.py:_insights`.
 
+## 6. PowerPoint deck (optional)
+
+A slide deck of the same data is generated from `report.json` (so run the tool
+once with `--save-json` first). The deck uses **native, editable PowerPoint
+charts** — not images.
+
+```bash
+python -m main --mock --dry-run --out ./out --save-json   # produces out/report.json
+cd pptx && npm install && cd ..
+node pptx/build_deck.js out/report.json out/newsletter.pptx
+```
+
+Ten slides: title, executive summary, risk leaderboard, severity by product,
+findings-by-source (origin), remediation (MTTR/SLA/aging), opened-vs-closed
+trend, most-critical findings, top CWEs/packages/CVEs, and key takeaways. For
+multi-workspace runs use the per-workspace `out/<workspace>/report.json`, or the
+combined one. To produce it in CI, add a Node step after the Python run
+(`actions/setup-node`, `npm ci` in `pptx/`, then the `node` command) and include
+`out/newsletter.pptx` in the uploaded artifact.
+
 ## Layout
 
 ```

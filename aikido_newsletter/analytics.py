@@ -68,6 +68,60 @@ def source_category(issue_type: str) -> str:
     return SOURCE_CATEGORIES.get(issue_type or "", "Other")
 
 
+# OWASP Top 10 (2021) mapping. Component/config/secret findings are classified by
+# their Aikido type first (more accurate for those); everything else by CWE.
+OWASP_ORDER = [
+    "A01 Broken Access Control", "A02 Cryptographic Failures", "A03 Injection",
+    "A04 Insecure Design", "A05 Security Misconfiguration",
+    "A06 Vulnerable & Outdated Components", "A07 Identification & Auth Failures",
+    "A08 Software & Data Integrity Failures",
+    "A09 Logging & Monitoring Failures", "A10 Server-Side Request Forgery", "Unmapped",
+]
+_TYPE_OWASP = {
+    "open_source": "A06 Vulnerable & Outdated Components",
+    "eol": "A06 Vulnerable & Outdated Components",
+    "docker_container": "A06 Vulnerable & Outdated Components",
+    "leaked_secret": "A07 Identification & Auth Failures",
+    "iac": "A05 Security Misconfiguration",
+    "cloud": "A05 Security Misconfiguration",
+    "cloud_instance": "A05 Security Misconfiguration",
+}
+_CWE_OWASP = {
+    "CWE-22": "A01 Broken Access Control", "CWE-284": "A01 Broken Access Control",
+    "CWE-639": "A01 Broken Access Control", "CWE-732": "A01 Broken Access Control",
+    "CWE-269": "A01 Broken Access Control", "CWE-250": "A01 Broken Access Control",
+    "CWE-311": "A02 Cryptographic Failures", "CWE-319": "A02 Cryptographic Failures",
+    "CWE-326": "A02 Cryptographic Failures", "CWE-327": "A02 Cryptographic Failures",
+    "CWE-79": "A03 Injection", "CWE-89": "A03 Injection", "CWE-78": "A03 Injection",
+    "CWE-90": "A03 Injection", "CWE-917": "A03 Injection",
+    "CWE-501": "A04 Insecure Design", "CWE-602": "A04 Insecure Design",
+    "CWE-16": "A05 Security Misconfiguration", "CWE-611": "A05 Security Misconfiguration",
+    "CWE-1321": "A08 Software & Data Integrity Failures",
+    "CWE-287": "A07 Identification & Auth Failures", "CWE-384": "A07 Identification & Auth Failures",
+    "CWE-798": "A07 Identification & Auth Failures",
+    "CWE-502": "A08 Software & Data Integrity Failures",
+    "CWE-829": "A08 Software & Data Integrity Failures", "CWE-494": "A08 Software & Data Integrity Failures",
+    "CWE-345": "A08 Software & Data Integrity Failures",
+    "CWE-778": "A09 Logging & Monitoring Failures", "CWE-117": "A09 Logging & Monitoring Failures",
+    "CWE-918": "A10 Server-Side Request Forgery",
+    "CWE-1333": "A06 Vulnerable & Outdated Components",
+}
+
+
+def owasp_category(issue: dict) -> str:
+    t = issue.get("type")
+    if t in _TYPE_OWASP:
+        return _TYPE_OWASP[t]
+    for cwe in (issue.get("cwe_classes") or []):
+        if cwe in _CWE_OWASP:
+            return _CWE_OWASP[cwe]
+    return "Unmapped"
+
+
+def _vuln_type(i: dict) -> str:
+    return i.get("rule") or TYPE_LABELS.get(i.get("type"), i.get("type") or "Unknown")
+
+
 def _is_open(i: dict) -> bool:
     return i.get("status") == "open"
 
@@ -285,6 +339,32 @@ def _insights(report: dict) -> list[str]:
             f"Backlog *shrank by {abs(net)}* this period "
             f"(closed {ov['closed_this_period']}, opened {ov['opened_this_period']}) — teams are gaining ground."
         )
+
+    if report.get("mttr_by_type"):
+        slow = report["mttr_by_type"][0]
+        out.append(
+            f"Hardest type to remediate is *{slow['type']}* "
+            f"(median *{slow['median']}d*, n={slow['n']}).")
+
+    if report.get("top_vuln_types"):
+        t, c = report["top_vuln_types"][0]
+        out.append(f"Most repeated open finding is *{t}* (*{c}* occurrences).")
+
+    if report.get("oldest_open"):
+        o = report["oldest_open"][0]
+        if o.get("age_days"):
+            out.append(
+                f"Oldest open finding has been open *{o['age_days']} days*: "
+                f"{o['rule']} ({o['severity']}) in {o['product']}.")
+
+    if report.get("owasp"):
+        ranked = sorted(report["owasp"].items(), key=lambda kv: kv[1]["risk"], reverse=True)
+        ranked = [(k, v) for k, v in ranked if k != "Unmapped"] or ranked
+        if ranked:
+            cat, d = ranked[0]
+            out.append(
+                f"Most risk concentrates in OWASP *{cat}* "
+                f"({d['count']} open, {d['critical']} critical).")
     return out
 
 
@@ -333,6 +413,55 @@ def build_report(
         reverse=True,
     )[:8]
 
+    # Cross-product analyses with product attribution
+    flat = [(name, i) for name, lst in issues_by_product.items() for i in lst]
+    open_flat = [(n, i) for n, i in flat if _is_open(i)]
+    closed_flat = [(n, i) for n, i in flat if i.get("status") == "closed"]
+
+    def _crit_row(name, i):
+        return {
+            "rule": _vuln_type(i), "severity": i.get("severity"),
+            "score": i.get("severity_score"), "type": i.get("type"),
+            "cve": i.get("cve_id"), "package": i.get("affected_package"),
+            "repo": i.get("code_repo_name") or i.get("container_repo_name")
+            or i.get("cloud_name") or i.get("domain_name"),
+            "age_days": round((now - i["first_detected_at"]) / DAY)
+            if i.get("first_detected_at") else None,
+            "overdue": bool(i.get("sla_remediate_by") and now > i["sla_remediate_by"]),
+            "product": name,
+        }
+
+    # Oldest still-open findings
+    oldest_open = [
+        _crit_row(n, i) for n, i in
+        sorted(open_flat, key=lambda ni: ni[1].get("first_detected_at") or 1 << 62)[:8]
+    ]
+
+    # Slowest vulnerability types to remediate (median MTTR, closed issues)
+    by_type: dict[str, list[float]] = defaultdict(list)
+    for n, i in closed_flat:
+        d = _mttr_days(i)
+        if d is not None:
+            by_type[_vuln_type(i)].append(d)
+    mttr_by_type = sorted(
+        ({"type": t, "median": round(statistics.median(v), 1), "n": len(v)}
+         for t, v in by_type.items() if len(v) >= 2),
+        key=lambda x: x["median"], reverse=True)[:8]
+
+    # Most repeated vulnerability types (open)
+    top_vuln_types = Counter(_vuln_type(i) for n, i in open_flat).most_common(8)
+
+    # OWASP Top 10 (2021) distribution of open findings, by severity + risk
+    owasp: dict[str, dict] = {}
+    for n, i in open_flat:
+        cat = owasp_category(i)
+        d = owasp.setdefault(cat, {"count": 0, "critical": 0, "high": 0,
+                                   "medium": 0, "low": 0, "risk": 0})
+        sev = i.get("severity", "low")
+        d["count"] += 1
+        d[sev] = d.get(sev, 0) + 1
+        d["risk"] += RISK_WEIGHTS.get(sev, 0)
+
     report = {
         "generated_at": now,
         "window_days": days,
@@ -346,6 +475,10 @@ def build_report(
         "top_cwes": _top_counter(cwes, top_n),
         "top_packages": _top_counter(pkgs, top_n),
         "top_cves": _top_counter(cves, top_n),
+        "oldest_open": oldest_open,
+        "mttr_by_type": mttr_by_type,
+        "top_vuln_types": top_vuln_types,
+        "owasp": owasp,
     }
     report["insights"] = _insights(report)
     return report
