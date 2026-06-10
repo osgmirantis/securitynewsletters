@@ -210,6 +210,53 @@ def open_aging(report: dict, out_dir: str) -> str:
     return _save(fig, out_dir, "open_aging.png")
 
 
+def mttr_by_type(report: dict, out_dir: str) -> str:
+    """Median time-to-remediate by vulnerability type (slowest = persists longest)."""
+    data = report.get("mttr_by_type") or []
+    if not data:
+        return ""
+    data = list(reversed(data))  # slowest at top after barh
+    labels = [f"{d['type'][:32]}" for d in data]
+    vals = [d["median"] for d in data]
+    ns = [d["n"] for d in data]
+    fig, ax = plt.subplots(figsize=(8.2, max(2.2, 0.5 * len(labels) + 1.1)))
+    ax.barh(labels, vals, color="#d29922", height=0.6)
+    for i, (v, n) in enumerate(zip(vals, ns)):
+        ax.text(v + max(vals + [1]) * 0.012, i, f"{v:g}d  (n={n})", va="center",
+                color=MUTED, fontsize=9)
+    _style(ax)
+    ax.set_title("Slowest vulnerability types to remediate (median MTTR)")
+    ax.set_xlabel("Median days to remediate")
+    return _save(fig, out_dir, "mttr_by_type.png")
+
+
+def owasp_top10(report: dict, out_dir: str) -> str:
+    """Open findings mapped to OWASP Top 10 (2021), stacked by severity = risk view."""
+    from .analytics import OWASP_ORDER
+    ow = report.get("owasp") or {}
+    cats = [c for c in OWASP_ORDER if c in ow]
+    cats.sort(key=lambda c: ow[c]["count"])  # ascending -> largest on top in barh
+    if not cats:
+        return ""
+    fig, ax = plt.subplots(figsize=(9, max(2.6, 0.5 * len(cats) + 1.6)))
+    left = [0] * len(cats)
+    for sev in ("critical", "high", "medium", "low"):
+        vals = [ow[c].get(sev, 0) for c in cats]
+        ax.barh(cats, vals, left=left, color=SEV_COLORS[sev], label=sev.capitalize(),
+                height=0.62, edgecolor=BG, linewidth=1)
+        left = [l + v for l, v in zip(left, vals)]
+    for i, total in enumerate(left):
+        if total:
+            ax.text(total + max(left) * 0.01, i, str(int(total)), va="center",
+                    color=MUTED, fontsize=9)
+    _style(ax)
+    ax.set_title("Open findings by OWASP Top 10 (2021), by severity", pad=14)
+    ax.set_xlabel("Open findings")
+    ax.legend(ncol=4, frameon=False, loc="upper center", fontsize=9,
+              bbox_to_anchor=(0.5, -0.16))
+    return _save(fig, out_dir, "owasp_top10.png")
+
+
 def top_cwes(report: dict, out_dir: str) -> str:
     data = report["top_cwes"]
     if not data:
@@ -230,8 +277,10 @@ CHARTS = [
     ("risk_leaderboard", risk_leaderboard),
     ("severity_by_product", severity_by_product),
     ("findings_by_source", findings_by_source),
+    ("owasp_top10", owasp_top10),
     ("opened_vs_closed_trend", opened_vs_closed_trend),
     ("mttr_by_severity", mttr_by_severity),
+    ("mttr_by_type", mttr_by_type),
     ("open_aging", open_aging),
     ("top_cwes", top_cwes),
 ]
