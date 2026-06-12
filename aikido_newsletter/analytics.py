@@ -122,6 +122,12 @@ def _vuln_type(i: dict) -> str:
     return i.get("rule") or TYPE_LABELS.get(i.get("type"), i.get("type") or "Unknown")
 
 
+# Security Hygiene Score weights (the friendly "best product" ranking).
+# Effort (speed + on-time + closing) is weighted above raw vuln count so any
+# team can win regardless of size. Tune freely — they sum to 1.0.
+HYGIENE_WEIGHTS = {"mttr": 0.30, "sla": 0.30, "throughput": 0.20, "exposure": 0.20}
+
+
 def _is_open(i: dict) -> bool:
     return i.get("status") == "open"
 
@@ -357,14 +363,17 @@ def _insights(report: dict) -> list[str]:
                 f"Oldest open finding has been open *{o['age_days']} days*: "
                 f"{o['rule']} ({o['severity']}) in {o['product']}.")
 
-    if report.get("owasp"):
-        ranked = sorted(report["owasp"].items(), key=lambda kv: kv[1]["risk"], reverse=True)
-        ranked = [(k, v) for k, v in ranked if k != "Unmapped"] or ranked
-        if ranked:
-            cat, d = ranked[0]
-            out.append(
-                f"Most risk concentrates in OWASP *{cat}* "
-                f"({d['count']} open, {d['critical']} critical).")
+    if report.get("champions") and len(report["champions"]) > 1:
+        top = report["champions"][0]
+        out.append(
+            f"Security champion this period is *{top['name']}* "
+            f"(hygiene score *{top['score']}/100*) — best balance of fast fixes, "
+            f"SLA adherence and low open risk.")
+    mi = report.get("most_improved")
+    if mi and mi["net"] > 0:
+        out.append(
+            f"Best momentum: *{mi['name']}* closed {mi['net']} more than it opened "
+            f"this period (closed {mi['closed']}, opened {mi['opened']}).")
     return out
 
 
@@ -462,6 +471,49 @@ def build_report(
         d[sev] = d.get(sev, 0) + 1
         d["risk"] += RISK_WEIGHTS.get(sev, 0)
 
+    # Security Champions — friendly "best product" ranking (higher = better)
+    prods = list(products.values())
+
+    def _scorer(values, lower_better=True):
+        vv = [v for v in values if v is not None]
+        lo, hi = (min(vv), max(vv)) if vv else (0, 0)
+
+        def f(v):
+            if v is None:
+                return 50.0
+            if hi == lo:
+                return 100.0
+            frac = (hi - v) / (hi - lo) if lower_better else (v - lo) / (hi - lo)
+            return round(100.0 * frac, 1)
+        return f
+
+    mttr_scorer = _scorer([p["mttr_all"]["median"] for p in prods], lower_better=True)
+    expo_scorer = _scorer([p["risk_score"] for p in prods], lower_better=True)
+    cw = HYGIENE_WEIGHTS
+    champions = []
+    for p in prods:
+        m = p["mttr_all"]["median"]
+        s_mttr = mttr_scorer(m)
+        sla = p["sla"]
+        s_sla = round(sla["pct"], 1) if sla["closed_with_sla"] else 50.0
+        op, cl = p["opened_this_period"], p["closed_this_period"]
+        s_thru = round(100.0 * cl / (op + cl), 1) if (op + cl) else 50.0
+        s_expo = expo_scorer(p["risk_score"])
+        score = round(cw["mttr"] * s_mttr + cw["sla"] * s_sla
+                      + cw["throughput"] * s_thru + cw["exposure"] * s_expo, 1)
+        champions.append({
+            "name": p["name"], "score": score, "mttr": s_mttr, "sla": s_sla,
+            "throughput": s_thru, "exposure": s_expo, "mttr_median": m,
+            "sla_pct": sla["pct"] if sla["closed_with_sla"] else None,
+            "opened": op, "closed": cl, "open": p["open"], "risk": p["risk_score"],
+        })
+    champions.sort(key=lambda x: x["score"], reverse=True)
+    _mi = max(prods, key=lambda p: p["closed_this_period"] - p["opened_this_period"]) if prods else None
+    most_improved = None if _mi is None else {
+        "name": _mi["name"], "closed": _mi["closed_this_period"],
+        "opened": _mi["opened_this_period"],
+        "net": _mi["closed_this_period"] - _mi["opened_this_period"]}
+
     report = {
         "generated_at": now,
         "window_days": days,
@@ -479,6 +531,9 @@ def build_report(
         "mttr_by_type": mttr_by_type,
         "top_vuln_types": top_vuln_types,
         "owasp": owasp,
+        "champions": champions,
+        "champion_weights": HYGIENE_WEIGHTS,
+        "most_improved": most_improved,
     }
     report["insights"] = _insights(report)
     return report

@@ -60,18 +60,18 @@ jobs:
           AIKIDO_REGION: ${{ vars.AIKIDO_REGION || 'eu' }}
           WORKSPACE_NAME: ${{ vars.WORKSPACE_NAME }}
           # Single-workspace fallback (used only if AIKIDO_WORKSPACES is empty):
-          # AIKIDO_CLIENT_ID: ${{ secrets.AIK_ID_K0RDENT }}
-          # AIKIDO_CLIENT_SECRET: ${{ secrets.AIK_SECRET_K0RDENT }}
+          AIKIDO_CLIENT_ID: ${{ secrets.AIK_ID_K0RDENT }}
+          AIKIDO_CLIENT_SECRET: ${{ secrets.AIK_SECRET_K0RDENT }}
           # Granular alternative — AIKIDO_WORKSPACES as a VARIABLE with id_env/secret_env
           # refs, plus one secret pair per workspace mapped here (uncomment & extend):
-          AIK_ID_K0RDENT: ${{ secrets.AIK_ID_K0RDENT }}
-          AIK_SECRET_K0RDENT: ${{ secrets.AIK_SECRET_K0RDENT }}
-          AIK_ID_MIRANTIS: ${{ secrets.AIK_ID_MIRANTIS }}
-          AIK_SECRET_MIRANTIS: ${{ secrets.AIK_SECRET_MIRANTIS }}
-          AIK_ID_MIRANTISPS: ${{ secrets.AIK_ID_MIRANTISPS }}
-          AIK_SECRET_MIRANTISPS: ${{ secrets.AIK_SECRET_MIRANTISPS }}
-          AIK_ID_MOSK: ${{ secrets.AIK_ID_MOSK }}
-          AIK_SECRET_MOSK: ${{ secrets.AIK_SECRET_MOSK }}
+          # AIK_ID_K0RDENT: ${{ secrets.AIK_ID_K0RDENT }}
+          # AIK_SECRET_K0RDENT: ${{ secrets.AIK_SECRET_K0RDENT }}
+          # AIK_ID_WS2: ${{ secrets.AIK_ID_WS2 }}
+          # AIK_SECRET_WS2: ${{ secrets.AIK_SECRET_WS2 }}
+          # AIK_ID_WS3: ${{ secrets.AIK_ID_WS3 }}
+          # AIK_SECRET_WS3: ${{ secrets.AIK_SECRET_WS3 }}
+          # AIK_ID_WS4: ${{ secrets.AIK_ID_WS4 }}
+          # AIK_SECRET_WS4: ${{ secrets.AIK_SECRET_WS4 }}
           # ----- Email recipients & sender (Variables; addresses aren't secret) -----
           EMAIL_TO: ${{ vars.EMAIL_TO }}
           EMAIL_CC: ${{ vars.EMAIL_CC }}
@@ -84,6 +84,7 @@ jobs:
           SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           # ----- misc -----
+          WORKSPACE_NAME: ${{ vars.WORKSPACE_NAME }}
           DAYS: ${{ github.event.inputs.days || '30' }}
           TREND_WEEKS: ${{ github.event.inputs.trend_weeks || '12' }}
           DRY_RUN: ${{ github.event.inputs.dry_run }}

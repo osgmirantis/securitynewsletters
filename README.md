@@ -187,30 +187,45 @@ All KPIs derive from the `/issues/export` fields, scoped per product team.
   closed at that point. A true point-in-time series, not a snapshot.
 - **Risk score** (leaderboard) — `10·critical + 5·high + 2·medium + 1·low` over
   open issues. Adjust the weights in `analytics.py:RISK_WEIGHTS`.
+- **Security Champions** (hygiene score, 0–100, higher is better) — a friendly
+  "best product" ranking that rewards remediation *effort*: remediation speed
+  (MTTR, 30%, scored relative to peers), on-time fixes (SLA adherence, 30%),
+  backlog control (closed ÷ opened+closed, 20%), and low open risk (severity-
+  weighted, 20%, relative to peers). Effort is weighted above raw vuln count so
+  any team can win regardless of size. Also surfaces a "best momentum / most
+  improved" product. Tune in `analytics.py:HYGIENE_WEIGHTS`.
 - **Top CWE / CVE / package** — frequency over open issues.
 - **Insights** — narrative lines derived from period-over-period critical delta,
   highest-risk product, dominant CWE, critical MTTR, total overdue, and net
   backlog change. Edit `analytics.py:_insights`.
 
-## 6. PowerPoint deck (optional)
+## 6. PowerPoint decks (optional)
 
-A slide deck of the same data is generated from `report.json` (so run the tool
-once with `--save-json` first). The deck uses **native, editable PowerPoint
-charts** — not images.
+Two decks are available:
+
+**Overview / methodology deck** — explains what the report is, what data it's
+based on, how findings are classified, and the KPI catalog with definitions (no
+live numbers). Data-independent:
+
+```bash
+cd pptx && npm install && cd ..
+node pptx/build_overview_deck.js out/newsletter-overview.pptx
+```
+
+**Data deck** — the current period's metrics as native, editable PowerPoint
+charts (built from `report.json`, so run the tool once with `--save-json`):
 
 ```bash
 python -m main --mock --dry-run --out ./out --save-json   # produces out/report.json
-cd pptx && npm install && cd ..
 node pptx/build_deck.js out/report.json out/newsletter.pptx
 ```
 
-Ten slides: title, executive summary, risk leaderboard, severity by product,
-findings-by-source (origin), remediation (MTTR/SLA/aging), opened-vs-closed
-trend, most-critical findings, top CWEs/packages/CVEs, and key takeaways. For
-multi-workspace runs use the per-workspace `out/<workspace>/report.json`, or the
-combined one. To produce it in CI, add a Node step after the Python run
-(`actions/setup-node`, `npm ci` in `pptx/`, then the `node` command) and include
-`out/newsletter.pptx` in the uploaded artifact.
+The data deck has ten slides: title, executive summary, risk leaderboard,
+severity by product, findings-by-source (origin), OWASP Top 10 risk,
+remediation (MTTR/SLA/aging), persistence & recurrence, opened-vs-closed trend,
+most-critical findings, top CWEs/packages/CVEs, and key takeaways. To produce in
+CI, add a Node step after the Python run (`actions/setup-node`, `npm ci` in
+`pptx/`, then the `node` command) and include the `.pptx` in the artifact.
 
 ## Layout
 

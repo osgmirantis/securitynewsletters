@@ -141,6 +141,50 @@ s.addTable([head, ...rows], { x: 7.5, y: 1.95, w: 5.2, colW: [2.15, 0.65, 0.5, 0
 footer(s);
 
 // ========================================================================
+// SECURITY CHAMPIONS (friendly "best product" ranking)
+// ========================================================================
+s = pres.addSlide(); s.background = { color: WHITE };
+kicker(s, "Friendly competition");
+title(s, "Security champions");
+s.addText("A positive ranking that rewards remediation effort — higher is better.", { x: M, y: 1.5, w: 11, h: 0.3, fontFace: BODY, fontSize: 12, color: MUTED, margin: 0 });
+const champs = R.champions || [];
+const GOLD = "E3B341";
+const chRev = champs.slice().reverse();
+const topScore = champs.length ? champs[0].score : 0;
+s.addChart(pres.charts.BAR, [{ name: "Hygiene", labels: chRev.map(c => c.name), values: chRev.map(c => c.score) }],
+  chartBase({
+    x: M, y: 1.95, w: 6.7, h: 4.8, barDir: "bar",
+    chartColors: chRev.map(c => c.score === topScore ? GOLD : "3FB950"),
+    showValue: true, dataLabelPosition: "outEnd", dataLabelColor: INK, dataLabelFontFace: BODY, dataLabelFontSize: 11,
+    showLegend: false, valAxisMaxVal: 100, valAxisMinVal: 0,
+  }));
+// champion callout (gold) + scoring legend on the right
+const cx = 7.5, cwd = W - 7.5 - M;
+if (champs.length) {
+  const top = champs[0];
+  s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: cx, y: 1.95, w: cwd, h: 1.7, rectRadius: 0.1, fill: { color: DARK }, shadow: shadow() });
+  s.addText("\u{1F3C6}  CHAMPION", { x: cx + 0.35, y: 2.18, w: cwd - 0.7, h: 0.3, fontFace: BODY, fontSize: 12, color: GOLD, bold: true, charSpacing: 2, margin: 0 });
+  s.addText(top.name, { x: cx + 0.32, y: 2.5, w: cwd - 0.64, h: 0.6, fontFace: HEAD, fontSize: 32, color: WHITE, bold: true, margin: 0 });
+  s.addText([{ text: `${top.score}`, options: { color: GOLD, bold: true, fontSize: 20 } }, { text: " / 100 hygiene score", options: { color: "AEB8C7", fontSize: 14 } }], { x: cx + 0.35, y: 3.16, w: cwd - 0.7, h: 0.35, fontFace: BODY, margin: 0 });
+}
+s.addText("HOW THE SCORE WORKS", { x: cx, y: 3.95, w: cwd, h: 0.3, fontFace: BODY, fontSize: 12, color: MUTED, bold: true, charSpacing: 1.5, margin: 0 });
+const wtRows = [
+  ["Remediation speed (MTTR)", "30%", ACCENT],
+  ["On-time fixes (SLA)", "30%", "1A7F37"],
+  ["Closing \u2265 opening", "20%", "1F9AA8"],
+  ["Low open risk", "20%", "8957E5"],
+];
+wtRows.forEach(([lab, pct, col], i) => {
+  const y = 4.35 + i * 0.5;
+  s.addShape(pres.shapes.OVAL, { x: cx, y: y + 0.04, w: 0.14, h: 0.14, fill: { color: col } });
+  s.addText(lab, { x: cx + 0.3, y, w: cwd - 1.0, h: 0.3, fontFace: BODY, fontSize: 13, color: INK, margin: 0 });
+  s.addText(pct, { x: cx + cwd - 0.8, y, w: 0.8, h: 0.3, fontFace: BODY, fontSize: 13, color: MUTED, bold: true, align: "right", margin: 0 });
+});
+const mi = R.most_improved;
+if (mi && mi.net > 0) s.addText(`Best momentum: ${mi.name} closed ${mi.net} more than it opened.`, { x: cx, y: 6.45, w: cwd, h: 0.3, fontFace: BODY, fontSize: 12, color: "1A7F37", italic: true, margin: 0 });
+footer(s);
+
+// ========================================================================
 // 4) SEVERITY BY PRODUCT (stacked bar)
 // ========================================================================
 s = pres.addSlide(); s.background = { color: WHITE };
