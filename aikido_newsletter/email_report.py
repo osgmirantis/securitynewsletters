@@ -35,7 +35,7 @@ LINE = "#e4e7ec"
 DARK = "#0d1117"
 ACCENT = "#2f6df6"
 
-CHART_ORDER = ["risk_leaderboard", "severity_by_product", "findings_by_source",
+CHART_ORDER = ["risk_leaderboard", "champions", "severity_by_product", "findings_by_source",
                "owasp_top10", "opened_vs_closed_trend", "mttr_by_severity",
                "mttr_by_type", "open_aging", "top_cwes"]
 
@@ -166,6 +166,35 @@ def render_html(report: dict, img_src: dict[str, str], workspace: str = "") -> s
         f'{t} <span style="color:{MUTED};">×{n}</span></span>'
         for t, n in (report.get("top_vuln_types") or [])[:8])
 
+    # Security Champions (friendly "best product" leaderboard)
+    champs = report.get("champions") or []
+    medals = ["🥇", "🥈", "🥉"]
+    champ_rows = ""
+    for i, c in enumerate(champs):
+        medal = medals[i] if i < 3 else f'<span style="color:{MUTED};">{i+1}</span>'
+        sla_txt = "—" if c["sla_pct"] is None else f'{round(c["sla_pct"])}%'
+        mttr_txt = "—" if c["mttr_median"] is None else f'{c["mttr_median"]:g}d'
+        champ_rows += (
+            f'<tr><td align="center" style="padding:9px 10px;border-bottom:1px solid {LINE};font-size:16px;">{medal}</td>'
+            f'<td style="padding:9px 12px;border-bottom:1px solid {LINE};font-weight:700;">{c["name"]}</td>'
+            f'<td align="right" style="padding:9px 12px;border-bottom:1px solid {LINE};">'
+            f'<span style="font-weight:800;font-size:16px;color:{"#1A7F37" if i == 0 else INK};">{c["score"]:g}</span>'
+            f'<span style="color:{MUTED};font-size:11px;"> /100</span></td>'
+            f'<td align="right" style="padding:9px 12px;border-bottom:1px solid {LINE};color:{MUTED};font-size:12px;">{mttr_txt}</td>'
+            f'<td align="right" style="padding:9px 12px;border-bottom:1px solid {LINE};color:{MUTED};font-size:12px;">{sla_txt}</td>'
+            f'<td align="right" style="padding:9px 12px;border-bottom:1px solid {LINE};color:{MUTED};font-size:12px;">{round(c["throughput"])}</td>'
+            f'<td align="right" style="padding:9px 12px;border-bottom:1px solid {LINE};color:{MUTED};font-size:12px;">{c["open"]}</td></tr>')
+    champ_headline = ""
+    if champs:
+        top = champs[0]
+        mi = report.get("most_improved")
+        mi_txt = ""
+        if mi and mi["net"] > 0:
+            mi_txt = f' &nbsp;·&nbsp; <b>Best momentum:</b> {mi["name"]} (net −{mi["net"]} backlog)'
+        champ_headline = (
+            f'🏆 <b>This period\'s champion: {top["name"]}</b> — hygiene score '
+            f'{top["score"]:g}/100.{mi_txt}')
+
     charts_html = ""
     for name in CHART_ORDER:
         if name in img_src:
@@ -212,7 +241,23 @@ def render_html(report: dict, img_src: dict[str, str], workspace: str = "") -> s
         <tr><td style="padding-top:10px;">
           <ul style="margin:0;padding-left:20px;color:{INK};font-size:14px;line-height:1.55;">{insights}</ul>
         </td></tr>
-        {section_title("🏆 Product risk leaderboard")}
+        {section_title("🏆 Security champions")}
+        <tr><td style="padding:8px 0 2px;color:{INK};font-size:13px;">{champ_headline}</td></tr>
+        <tr><td style="padding:2px 0 2px;color:{MUTED};font-size:12px;">
+          Hygiene score rewards effort: fast fixes (MTTR 30%), on-time remediation (SLA 30%),
+          closing faster than opening (20%) and low open risk (20%). Higher is better.
+        </td></tr>
+        <tr><td style="padding-top:8px;">
+          <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
+            style="border:1px solid {LINE};border-radius:8px;overflow:hidden;font-size:13px;color:{INK};">
+            <tr style="background:#eef6f0;font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:{MUTED};">
+              <td align="center" style="padding:8px 10px;">#</td><td style="padding:8px 12px;">Product</td>
+              <td align="right" style="padding:8px 12px;">Score</td><td align="right" style="padding:8px 12px;">MTTR</td>
+              <td align="right" style="padding:8px 12px;">SLA</td><td align="right" style="padding:8px 12px;">Closing</td>
+              <td align="right" style="padding:8px 12px;">Open</td></tr>
+            {champ_rows}
+          </table></td></tr>
+        {section_title("⚠️ Product risk leaderboard")}
         <tr><td style="padding-top:12px;">
           <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
             style="border:1px solid {LINE};border-radius:8px;overflow:hidden;font-size:13px;color:{INK};">
@@ -280,6 +325,18 @@ def render_text(report: dict, workspace: str = "") -> str:
          f"   Net backlog: {'+' if net > 0 else ''}{net}",
          "", "INSIGHTS"]
     L += [f"  - {s.replace('*', '')}" for s in report["insights"]]
+    champs = report.get("champions") or []
+    if champs:
+        L += ["", "SECURITY CHAMPIONS (hygiene score, higher is better)",
+              f"  {'#':<3}{'Product':<18}{'Score':>6}{'MTTR':>7}{'SLA':>6}{'Close':>7}"]
+        for i, c in enumerate(champs):
+            mttr_txt = "—" if c["mttr_median"] is None else f"{c['mttr_median']:g}d"
+            sla_txt = "—" if c["sla_pct"] is None else f"{round(c['sla_pct'])}%"
+            L.append(f"  {i+1:<3}{c['name'][:17]:<18}{c['score']:>6g}{mttr_txt:>7}"
+                     f"{sla_txt:>6}{round(c['throughput']):>7}")
+        mi = report.get("most_improved")
+        if mi and mi["net"] > 0:
+            L.append(f"  Best momentum: {mi['name']} (net -{mi['net']} backlog)")
     L += ["", "RISK LEADERBOARD",
           f"  {'Product':<18}{'Risk':>5}{'Crit':>5}{'High':>5}{'Late':>6}"]
     for b in report["leaderboard"]:

@@ -55,6 +55,27 @@ def _save(fig, out_dir: str, name: str) -> str:
     return path
 
 
+def champions(report: dict, out_dir: str) -> str:
+    """Security Champions — hygiene score per product (higher is better)."""
+    ch = report.get("champions") or []
+    if not ch:
+        return ""
+    rev = list(reversed(ch))  # best at top
+    labels = [c["name"] for c in rev]
+    vals = [c["score"] for c in rev]
+    top = max(vals) if vals else 0
+    colors = ["#e3b341" if v == top else "#3fb950" for v in vals]
+    fig, ax = plt.subplots(figsize=(8, max(2.4, 0.5 * len(labels) + 1.2)))
+    ax.barh(labels, vals, color=colors, height=0.6)
+    for i, v in enumerate(vals):
+        ax.text(v + 1, i, f"{v:g}", va="center", color=MUTED, fontsize=10, fontweight="bold")
+    ax.set_xlim(0, 105)
+    _style(ax)
+    ax.set_title("Security Champions — hygiene score (higher is better)")
+    ax.set_xlabel("Hygiene score (0–100)")
+    return _save(fig, out_dir, "champions.png")
+
+
 def severity_by_product(report: dict, out_dir: str) -> str:
     products = list(report["products"].values())
     products.sort(key=lambda p: p["risk_score"])
@@ -275,6 +296,7 @@ def top_cwes(report: dict, out_dir: str) -> str:
 
 CHARTS = [
     ("risk_leaderboard", risk_leaderboard),
+    ("champions", champions),
     ("severity_by_product", severity_by_product),
     ("findings_by_source", findings_by_source),
     ("owasp_top10", owasp_top10),
