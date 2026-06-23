@@ -165,6 +165,43 @@ trigger). To enable it:
 
 ---
 
+## PDF attachment & Google Drive
+
+**PDF.** Every email also carries a **PDF attachment with the same content as the
+email body** (executive summary, insights, leaderboards, charts). It's rendered
+from the same HTML with WeasyPrint, so it always matches the email. On by
+default; disable with `--no-attach-pdf` (or `ATTACH_PDF=false`). The PDF is also
+written to the output dir (and the GitHub Actions artifact). WeasyPrint needs a
+few system libraries — the shipped workflow installs them; locally on Debian/
+Ubuntu: `apt-get install -y libpango-1.0-0 libpangocairo-1.0-0
+libgdk-pixbuf-2.0-0 libffi-dev libcairo2`.
+
+**Google Drive.** Apart from emailing, the same PDF can be pushed to a Drive
+folder. Set up once:
+
+1. In Google Cloud, create a **service account**, enable the **Drive API**, and
+   download its JSON key.
+2. In Drive, **share the destination folder** with the service account's
+   `client_email` (Editor). (For a Shared Drive folder, also pass
+   `--gdrive-shared-drive` / `GDRIVE_SHARED_DRIVE=true`.)
+3. Provide to the tool:
+   - `GDRIVE_FOLDER_ID` — the folder's ID (from its URL), and
+   - `GDRIVE_SERVICE_ACCOUNT_JSON` — the key JSON inline (a GitHub **Secret**),
+     or `--gdrive-credentials /path/to/key.json` locally.
+
+When both a folder and credentials are present, the PDF uploads after the email
+sends (it's skipped on `--dry-run`, which just notes what it would do). Upload
+failures are logged but never block the email. Scope used is `drive.file` (the
+app can only touch files it creates).
+
+```bash
+# local: email + attach PDF + upload to Drive
+GDRIVE_SERVICE_ACCOUNT_JSON="$(cat sa.json)" GDRIVE_FOLDER_ID=1AbC… \
+  python -m main --email-to team@corp.com --smtp-host smtp.gmail.com …
+```
+
+---
+
 ## How the KPIs are computed
 
 All KPIs derive from the `/issues/export` fields, scoped per product team.

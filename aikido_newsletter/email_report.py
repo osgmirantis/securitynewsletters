@@ -379,7 +379,7 @@ def render_text(report: dict, workspace: str = "") -> str:
 # --------------------------------------------------------------------------- #
 def build_message(report: dict, charts: dict[str, str], *, sender: str,
                   recipients: list[str], subject: str, cc: list[str] | None = None,
-                  workspace: str = "") -> EmailMessage:
+                  workspace: str = "", attachments: list[str] | None = None) -> EmailMessage:
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = sender
@@ -399,7 +399,17 @@ def build_message(report: dict, charts: dict[str, str], *, sender: str,
             html_part.add_related(f.read(), maintype="image", subtype="png",
                                   cid=cids[name], filename=f"{name}.png",
                                   disposition="inline")
+    # File attachments (e.g. the newsletter PDF) — attached to the top-level message
+    import mimetypes
+    import os as _os
+    for path in (attachments or []):
+        ctype, _ = mimetypes.guess_type(path)
+        maintype, subtype = (ctype or "application/octet-stream").split("/", 1)
+        with open(path, "rb") as f:
+            msg.add_attachment(f.read(), maintype=maintype, subtype=subtype,
+                               filename=_os.path.basename(path))
     return msg
+
 
 
 class EmailPublisher:

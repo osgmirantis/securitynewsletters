@@ -30,7 +30,8 @@ import re
 import sys
 import time
 
-from aikido_newsletter import analytics, charts, email_report, mock_data, workspaces
+from aikido_newsletter import (analytics, charts, email_report, gdrive, mock_data,
+                               pdf_report, workspaces)
 from aikido_newsletter.aikido_client import AikidoClient
 
 
@@ -78,6 +79,19 @@ def parse_args(argv=None):
     p.add_argument("--mock", action="store_true", help="Use synthetic data")
     p.add_argument("--out", default="./out", help="Output directory")
     p.add_argument("--save-json", action="store_true", help="Also write report.json")
+    # PDF attachment (same content as the email body)
+    p.add_argument("--attach-pdf", action=argparse.BooleanOptionalAction,
+                   default=_env("ATTACH_PDF", "true").lower() not in ("0", "false", "no"),
+                   help="Attach a PDF of the newsletter to the email (default: on)")
+    # Google Drive upload of that PDF
+    p.add_argument("--gdrive-folder", default=_env("GDRIVE_FOLDER_ID"),
+                   help="Google Drive folder ID to upload the PDF into")
+    p.add_argument("--gdrive-credentials", default=_env("GDRIVE_SERVICE_ACCOUNT_FILE"),
+                   help="Path to a service-account JSON key (or set "
+                        "GDRIVE_SERVICE_ACCOUNT_JSON inline)")
+    p.add_argument("--gdrive-shared-drive", action="store_true",
+                   default=_env("GDRIVE_SHARED_DRIVE", "").lower() in ("1", "true", "yes"),
+                   help="Target folder lives on a Shared Drive")
     return p.parse_args(argv)
 
 
@@ -127,6 +141,21 @@ def deliver(args, label, report, chart_paths, out_dir, dry_run):
     subject = args.email_subject or email_report.default_subject(report, workspace)
     sender = args.email_from or "newsletter@example.com"
 
+    # Build the PDF (same content as the email body) if we'll attach or upload it.
+    want_gdrive = bool(args.gdrive_folder and
+                       (args.gdrive_credentials or _env("GDRIVE_SERVICE_ACCOUNT_JSON")))
+    pdf_path = None
+    if args.attach_pdf or want_gdrive or dry_run:
+        pdf_path = os.path.join(out_dir, pdf_report.default_pdf_name(report, workspace))
+        try:
+            pdf_report.render_pdf(report, chart_paths, pdf_path, workspace)
+            print(f"  ✓ PDF: {pdf_path}")
+        except Exception as e:  # don't let a PDF/render issue block the email
+            print(f"  ! PDF generation failed ({e}); continuing without it.")
+            pdf_path = None
+
+    attachments = [pdf_path] if (pdf_path and args.attach_pdf) else []
+
     if dry_run:
         html = email_report.render_html(
             report, {n: email_report.data_uri(p) for n, p in chart_paths.items()}, workspace)
@@ -136,23 +165,40 @@ def deliver(args, label, report, chart_paths, out_dir, dry_run):
         msg = email_report.build_message(
             report, chart_paths, sender=sender,
             recipients=to or ["recipient@example.com"], subject=subject, cc=cc,
-            workspace=workspace)
+            workspace=workspace, attachments=attachments)
         with open(os.path.join(out_dir, "newsletter.eml"), "wb") as f:
             f.write(bytes(msg))
-        print(f"  ✓ Preview: {html_path}  (+ newsletter.eml)")
+        print(f"  ✓ Preview: {html_path}  (+ newsletter.eml"
+              f"{', PDF attached' if attachments else ''})")
+        if want_gdrive:
+            print(f"  • (dry-run) would upload {os.path.basename(pdf_path)} to "
+                  f"Drive folder {args.gdrive_folder}")
         return
 
     if not args.smtp_host:
         sys.exit("ERROR: set SMTP_HOST (and EMAIL_TO) to send, or use --dry-run.")
     msg = email_report.build_message(
         report, chart_paths, sender=sender, recipients=to, subject=subject,
-        cc=cc, workspace=workspace)
+        cc=cc, workspace=workspace, attachments=attachments)
     pub = email_report.EmailPublisher(
         args.smtp_host, args.smtp_port, args.smtp_username, args.smtp_password,
         args.smtp_security)
     print(f"  • Sending to {len(to + cc + bcc)} recipient(s) via {args.smtp_host}…")
     pub.send(msg, to + cc + bcc)
-    print("  ✓ Email sent.")
+    print(f"  ✓ Email sent{' (PDF attached)' if attachments else ''}.")
+
+    # Upload the PDF to Google Drive (independent of email).
+    if want_gdrive and pdf_path:
+        try:
+            uploader = gdrive.GDriveUploader(
+                service_account_json=_env("GDRIVE_SERVICE_ACCOUNT_JSON") or None,
+                service_account_file=args.gdrive_credentials or None)
+            res = uploader.upload(
+                pdf_path, folder_id=args.gdrive_folder,
+                shared_drive=args.gdrive_shared_drive)
+            print(f"  ✓ Uploaded to Google Drive: {res.get('link') or res.get('id')}")
+        except Exception as e:
+            print(f"  ! Google Drive upload failed: {e}")
 
 
 def main(argv=None) -> int:
