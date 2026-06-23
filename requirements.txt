@@ -1,7 +1,7 @@
 requests>=2.31
 matplotlib>=3.7
-# PDF attachment (HTML -> PDF). Needs system libs on the runner:
-#   apt-get install -y libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf-2.0-0 libffi-dev libcairo2
+# Optional: only needed for --attach-format pdf|both (HTML attach needs nothing).
+# At runtime PDF also needs system libs: libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf-2.0-0 libffi-dev libcairo2
 weasyprint>=60
 # Google Drive upload (optional — only needed if GDRIVE_* is configured)
 google-api-python-client>=2.0

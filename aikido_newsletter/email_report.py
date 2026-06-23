@@ -49,6 +49,20 @@ def data_uri(path: str) -> str:
         return "data:image/png;base64," + base64.b64encode(f.read()).decode()
 
 
+def render_standalone_html(report: dict, charts: dict[str, str], workspace: str = "") -> str:
+    """The exact email body as a self-contained page (charts inlined as data
+    URIs), suitable for saving, attaching, or uploading — renders identically to
+    the email in any browser, with no external assets."""
+    return render_html(report, {n: data_uri(p) for n, p in charts.items()}, workspace)
+
+
+def default_html_name(report: dict, workspace: str = "") -> str:
+    import datetime as _dt
+    d = lambda ts: _dt.datetime.utcfromtimestamp(ts).strftime("%Y-%m-%d")
+    ws = ("".join(c if c.isalnum() else "-" for c in workspace).strip("-") + "_") if workspace else ""
+    return f"Product-Security-Newsletter_{ws}{d(report['window_start'])}_{d(report['generated_at'])}.html"
+
+
 def default_subject(report: dict, workspace: str = "") -> str:
     rng = f"{_d(report['window_start'])} - {_d(report['generated_at'])}"
     ws = f" - {workspace}" if workspace else ""
