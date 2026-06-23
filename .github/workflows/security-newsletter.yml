@@ -45,6 +45,12 @@ jobs:
           python-version: "3.12"
           cache: pip
 
+      - name: Install system libraries for PDF (WeasyPrint)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf-2.0-0 libffi-dev libcairo2
+
       - name: Install dependencies
         run: pip install -r requirements.txt
 
@@ -83,6 +89,14 @@ jobs:
           SMTP_SECURITY: ${{ vars.SMTP_SECURITY || 'starttls' }}
           SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          # ----- PDF attachment + Google Drive upload -----
+          # PDF of the email body is attached by default; set ATTACH_PDF=false to disable.
+          ATTACH_PDF: ${{ vars.ATTACH_PDF || 'true' }}
+          # To also push the PDF to Drive: create a service account with the Drive API,
+          # share the target folder with its client_email, then set these.
+          GDRIVE_FOLDER_ID: ${{ vars.GDRIVE_FOLDER_ID }}
+          GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
+          GDRIVE_SHARED_DRIVE: ${{ vars.GDRIVE_SHARED_DRIVE || 'false' }}
           # ----- misc -----
           WORKSPACE_NAME: ${{ vars.WORKSPACE_NAME }}
           DAYS: ${{ github.event.inputs.days || '30' }}
