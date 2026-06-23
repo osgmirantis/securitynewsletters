@@ -165,18 +165,26 @@ trigger). To enable it:
 
 ---
 
-## PDF attachment & Google Drive
+## Attachment & Google Drive
 
-**PDF.** Every email also carries a **PDF attachment with the same content as the
-email body** (executive summary, insights, leaderboards, charts). It's rendered
-from the same HTML with WeasyPrint, so it always matches the email. On by
-default; disable with `--no-attach-pdf` (or `ATTACH_PDF=false`). The PDF is also
-written to the output dir (and the GitHub Actions artifact). WeasyPrint needs a
-few system libraries — the shipped workflow installs them; locally on Debian/
-Ubuntu: `apt-get install -y libpango-1.0-0 libpangocairo-1.0-0
-libgdk-pixbuf-2.0-0 libffi-dev libcairo2`.
+**Attachment.** Every email carries an attachment with **the same content as the
+email body** (executive summary, insights, leaderboards, charts). Pick the
+format with `--attach-format` (env `ATTACH_FORMAT`):
 
-**Google Drive.** Apart from emailing, the same PDF can be pushed to a Drive
+- `html` *(default)* — a **self-contained HTML file**: it's the email body
+  itself, with charts inlined, so it renders identically in any browser and in
+  Google Drive's preview. No PDF engine, no fonts, no system libraries — the
+  most reliable option.
+- `pdf` — a PDF rendered from the same HTML via WeasyPrint. Needs system libs on
+  the runner (`apt-get install -y libpango-1.0-0 libpangocairo-1.0-0
+  libgdk-pixbuf-2.0-0 libffi-dev libcairo2`); emoji are stripped from the PDF
+  since the print fonts can't draw them. Use this only if a PDF is required.
+- `both` — attach the HTML and the PDF.
+- `none` — body only.
+
+The file is also written to the output dir (and the CI artifact).
+
+**Google Drive.** Apart from emailing, the attachment is pushed to a Drive
 folder. Set up once:
 
 1. In Google Cloud, create a **service account**, enable the **Drive API**, and
@@ -189,13 +197,13 @@ folder. Set up once:
    - `GDRIVE_SERVICE_ACCOUNT_JSON` — the key JSON inline (a GitHub **Secret**),
      or `--gdrive-credentials /path/to/key.json` locally.
 
-When both a folder and credentials are present, the PDF uploads after the email
-sends (it's skipped on `--dry-run`, which just notes what it would do). Upload
-failures are logged but never block the email. Scope used is `drive.file` (the
-app can only touch files it creates).
+When a folder and credentials are present, the file uploads after the email
+sends (skipped on `--dry-run`). Upload failures are logged but never block the
+email. Scope used is `drive.file`. Note: service accounts can write to a folder
+shared with them or to a Shared Drive — not to a human's personal My Drive root.
 
 ```bash
-# local: email + attach PDF + upload to Drive
+# local: email + attach the self-contained HTML + upload it to Drive
 GDRIVE_SERVICE_ACCOUNT_JSON="$(cat sa.json)" GDRIVE_FOLDER_ID=1AbC… \
   python -m main --email-to team@corp.com --smtp-host smtp.gmail.com …
 ```

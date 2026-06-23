@@ -45,7 +45,8 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      - name: Install system libraries for PDF (WeasyPrint)
+      - name: Install system libraries for PDF (only when attaching PDF)
+        if: ${{ vars.ATTACH_FORMAT == 'pdf' || vars.ATTACH_FORMAT == 'both' }}
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
@@ -89,11 +90,14 @@ jobs:
           SMTP_SECURITY: ${{ vars.SMTP_SECURITY || 'starttls' }}
           SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-          # ----- PDF attachment + Google Drive upload -----
-          # PDF of the email body is attached by default; set ATTACH_PDF=false to disable.
-          ATTACH_PDF: ${{ vars.ATTACH_PDF || 'true' }}
-          # To also push the PDF to Drive: create a service account with the Drive API,
-          # share the target folder with its client_email, then set these.
+          # ----- Attachment + Google Drive upload -----
+          # Same content as the email body. 'html' (default) is a self-contained
+          # page that renders identically in any browser / Drive preview — no PDF
+          # engine or fonts needed. Set to 'pdf' or 'both' to also produce a PDF
+          # (then the system-libraries step above runs).
+          ATTACH_FORMAT: ${{ vars.ATTACH_FORMAT || 'html' }}
+          # To also push the file to Drive: create a service account with the Drive
+          # API, share the target folder with its client_email, then set these.
           GDRIVE_FOLDER_ID: ${{ vars.GDRIVE_FOLDER_ID }}
           GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
           GDRIVE_SHARED_DRIVE: ${{ vars.GDRIVE_SHARED_DRIVE || 'false' }}

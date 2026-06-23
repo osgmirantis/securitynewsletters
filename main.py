@@ -79,13 +79,14 @@ def parse_args(argv=None):
     p.add_argument("--mock", action="store_true", help="Use synthetic data")
     p.add_argument("--out", default="./out", help="Output directory")
     p.add_argument("--save-json", action="store_true", help="Also write report.json")
-    # PDF attachment (same content as the email body)
-    p.add_argument("--attach-pdf", action=argparse.BooleanOptionalAction,
-                   default=_env("ATTACH_PDF", "true").lower() not in ("0", "false", "no"),
-                   help="Attach a PDF of the newsletter to the email (default: on)")
-    # Google Drive upload of that PDF
+    # Attachment of the newsletter (same content as the email body)
+    p.add_argument("--attach-format", choices=["html", "pdf", "both", "none"],
+                   default=_env("ATTACH_FORMAT", "html").lower(),
+                   help="What to attach to the email and upload to Drive "
+                        "(default: html — renders identically everywhere)")
+    # Google Drive upload of the attachment
     p.add_argument("--gdrive-folder", default=_env("GDRIVE_FOLDER_ID"),
-                   help="Google Drive folder ID to upload the PDF into")
+                   help="Google Drive folder ID to upload the file into")
     p.add_argument("--gdrive-credentials", default=_env("GDRIVE_SERVICE_ACCOUNT_FILE"),
                    help="Path to a service-account JSON key (or set "
                         "GDRIVE_SERVICE_ACCOUNT_JSON inline)")
@@ -141,24 +142,30 @@ def deliver(args, label, report, chart_paths, out_dir, dry_run):
     subject = args.email_subject or email_report.default_subject(report, workspace)
     sender = args.email_from or "newsletter@example.com"
 
-    # Build the PDF (same content as the email body) if we'll attach or upload it.
+    # Build the attachment(s) — same content as the email body.
+    # HTML is the default: it's the email body itself, so it renders identically
+    # everywhere (fonts, emoji, charts) with no PDF engine in the way.
     want_gdrive = bool(args.gdrive_folder and
                        (args.gdrive_credentials or _env("GDRIVE_SERVICE_ACCOUNT_JSON")))
-    pdf_path = None
-    if args.attach_pdf or want_gdrive or dry_run:
+    fmt = args.attach_format
+    attachments = []
+    if fmt in ("html", "both"):
+        html_path = os.path.join(out_dir, email_report.default_html_name(report, workspace))
+        with open(html_path, "w", encoding="utf-8") as f:
+            f.write(email_report.render_standalone_html(report, chart_paths, workspace))
+        attachments.append(html_path)
+        print(f"  ✓ HTML attachment: {html_path}")
+    if fmt in ("pdf", "both"):
         pdf_path = os.path.join(out_dir, pdf_report.default_pdf_name(report, workspace))
         try:
             pdf_report.render_pdf(report, chart_paths, pdf_path, workspace)
-            print(f"  ✓ PDF: {pdf_path}")
-        except Exception as e:  # don't let a PDF/render issue block the email
+            attachments.append(pdf_path)
+            print(f"  ✓ PDF attachment: {pdf_path}")
+        except Exception as e:
             print(f"  ! PDF generation failed ({e}); continuing without it.")
-            pdf_path = None
-
-    attachments = [pdf_path] if (pdf_path and args.attach_pdf) else []
 
     if dry_run:
-        html = email_report.render_html(
-            report, {n: email_report.data_uri(p) for n, p in chart_paths.items()}, workspace)
+        html = email_report.render_standalone_html(report, chart_paths, workspace)
         html_path = os.path.join(out_dir, "newsletter_email.html")
         with open(html_path, "w") as f:
             f.write(html)
@@ -168,10 +175,10 @@ def deliver(args, label, report, chart_paths, out_dir, dry_run):
             workspace=workspace, attachments=attachments)
         with open(os.path.join(out_dir, "newsletter.eml"), "wb") as f:
             f.write(bytes(msg))
-        print(f"  ✓ Preview: {html_path}  (+ newsletter.eml"
-              f"{', PDF attached' if attachments else ''})")
-        if want_gdrive:
-            print(f"  • (dry-run) would upload {os.path.basename(pdf_path)} to "
+        att_note = (", attached: " + ", ".join(os.path.basename(a) for a in attachments)) if attachments else ""
+        print(f"  ✓ Preview: {html_path}  (+ newsletter.eml{att_note})")
+        if want_gdrive and attachments:
+            print(f"  • (dry-run) would upload {len(attachments)} file(s) to "
                   f"Drive folder {args.gdrive_folder}")
         return
 
@@ -185,18 +192,20 @@ def deliver(args, label, report, chart_paths, out_dir, dry_run):
         args.smtp_security)
     print(f"  • Sending to {len(to + cc + bcc)} recipient(s) via {args.smtp_host}…")
     pub.send(msg, to + cc + bcc)
-    print(f"  ✓ Email sent{' (PDF attached)' if attachments else ''}.")
+    print(f"  ✓ Email sent{(' (attached ' + str(len(attachments)) + ' file(s))') if attachments else ''}.")
 
-    # Upload the PDF to Google Drive (independent of email).
-    if want_gdrive and pdf_path:
+    # Upload the attachment(s) to Google Drive (independent of email).
+    if want_gdrive and attachments:
         try:
             uploader = gdrive.GDriveUploader(
                 service_account_json=_env("GDRIVE_SERVICE_ACCOUNT_JSON") or None,
                 service_account_file=args.gdrive_credentials or None)
-            res = uploader.upload(
-                pdf_path, folder_id=args.gdrive_folder,
-                shared_drive=args.gdrive_shared_drive)
-            print(f"  ✓ Uploaded to Google Drive: {res.get('link') or res.get('id')}")
+            for path in attachments:
+                mime = "text/html" if path.endswith(".html") else "application/pdf"
+                res = uploader.upload(
+                    path, folder_id=args.gdrive_folder, mime=mime,
+                    shared_drive=args.gdrive_shared_drive)
+                print(f"  ✓ Uploaded to Google Drive: {res.get('link') or res.get('id')}")
         except Exception as e:
             print(f"  ! Google Drive upload failed: {e}")
 
